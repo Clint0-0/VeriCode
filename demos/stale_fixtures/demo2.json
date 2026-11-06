@@ -1,0 +1,30 @@
+{
+  "_notice": "OFFLINE FIXTURE for reproducible demos/tests. Excerpts are short paraphrased summaries of the referenced official pages, not live retrievals. Results produced from this file are labelled origin=fixture in the UI and API.",
+  "answer": "Python 3.12 is the latest stable version of Python. Python 3.14 introduced template string literals, known as t-strings. The Python Software Foundation plans to remove the GIL from CPython entirely by 2027. Python was created by Guido van Rossum.",
+  "sources": [
+    {
+      "title": "Python Release Python 3.14.0 (fixture)",
+      "url": "https://www.python.org/downloads/release/python-3140/",
+      "published_date": "2025-10-07",
+      "keywords": ["python", "latest", "stable", "version", "release", "3.12", "notes"],
+      "min_match": 3,
+      "content": "Python 3.14.0 is the newest major release of the Python programming language. Release date: Oct. 7, 2025. This is the stable release of Python 3.14.0."
+    },
+    {
+      "title": "Python Release Python 3.12.0 (fixture)",
+      "url": "https://www.python.org/downloads/release/python-3120/",
+      "published_date": "2023-10-02",
+      "keywords": ["python", "latest", "stable", "version", "release", "3.12"],
+      "min_match": 3,
+      "content": "Python 3.12.0 is the newest major release of the Python programming language. Release date: Oct. 2, 2023. This is the stable release of Python 3.12.0."
+    },
+    {
+      "title": "What's new in Python 3.14 (fixture)",
+      "url": "https://docs.python.org/3.14/whatsnew/3.14.html",
+      "published_date": "2025-10-07",
+      "keywords": ["python", "3.14", "template", "string", "literals", "t-strings", "introduced"],
+      "min_match": 3,
+      "content": "This article explains the new features in Python 3.14. PEP 750 adds template string literals (t-strings) to Python 3.14, a generalization of f-strings."
+    }
+  ]
+}

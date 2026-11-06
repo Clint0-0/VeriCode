@@ -1,0 +1,10 @@
+[project]
+name = "taskboard"
+version = "0.3.0"
+requires-python = ">=3.10"
+dependencies = ["pydantic>=1.10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Deprecated APIs must not ship: treat deprecation warnings as errors.
+filterwarnings = ["error::DeprecationWarning"]

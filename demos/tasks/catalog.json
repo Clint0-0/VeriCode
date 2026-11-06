@@ -1,0 +1,27 @@
+[
+  {
+    "id": "users",
+    "title": "Demo 1 - Pydantic User model (incompatible v1 API planned)",
+    "project": "sample_project",
+    "prompt": "Create taskboard/users.py with a User model: username (3-20 chars, lowercase letters, digits, underscore only) and email (normalized to lowercase by a validator). Add to_public_dict() returning the user as a dict without the email.",
+    "acceptance_tests": {
+      "tests/test_users.py": "users/test_users.py"
+    },
+    "expected_findings": {
+      "pydantic.BaseModel": "ok",
+      "pydantic.Field": "problem",
+      "pydantic.validator": "problem",
+      "pydantic.BaseModel.dict": "problem"
+    }
+  },
+  {
+    "id": "summary",
+    "title": "Demo 3 - priority_summary() on TaskStore (no API risk)",
+    "project": "sample_project",
+    "prompt": "Add a priority_summary() method to TaskStore that returns counts of open tasks per priority.",
+    "acceptance_tests": {
+      "tests/test_summary.py": "summary/test_summary.py"
+    },
+    "expected_findings": {}
+  }
+]
