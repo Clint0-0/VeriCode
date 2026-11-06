@@ -10,3 +10,5 @@ dist/
 .vericode_cache/
 demos/**/.venv/
 demos/_runs/
+*.db-shm
+*.db-wal

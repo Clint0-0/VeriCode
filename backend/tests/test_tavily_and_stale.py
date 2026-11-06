@@ -182,3 +182,22 @@ def test_ssrf_blocked_for_user_urls(tmp_path):
     r = stale.analyze("ChatGPT Plus costs $20 per month.", urls=["http://127.0.0.1:8000/admin", "file:///etc/passwd"],
                       mode="fixture", fixture=fixture_file(tmp_path, []))
     assert len(r["summary"]["url_errors"]) == 2
+
+
+def test_live_api_verification_uses_official_docs(sample_project):
+    from vericode.repo_intel import inspect_project
+    from vericode.skeleton import PlannedAPI, PlannedPackage, Skeleton
+    from vericode.verify_api import verify_skeleton
+    seen = {}
+
+    def h(req):
+        seen["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"results": [{"title": "Validators - Pydantic", "url": "https://docs.pydantic.dev/latest/concepts/validators/",
+                                                      "content": "Use field_validator ... the validator decorator is deprecated in V2.", "published_date": None}]})
+    env = inspect_project(sample_project)
+    sk = Skeleton(packages=[PlannedPackage(package="pydantic", ecosystem="python", assumed_version="1.10",
+                                           planned_apis=[PlannedAPI(import_path="pydantic", name="validator", type="decorator")])])
+    f = verify_skeleton(env, sk, client_with(h), live=True)[0]
+    assert f.status == "DEPRECATED" and "tavily_live_search" in f.verification_method
+    assert "docs.pydantic.dev" in seen["body"]["include_domains"]  # domain from installed package metadata
+    assert f.live["sources"][0]["official"] and f.live["sources"][0]["mentions_api"]

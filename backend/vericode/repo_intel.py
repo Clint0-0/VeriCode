@@ -397,7 +397,12 @@ def _terms(text: str) -> set[str]:
 
 def select_relevant_files(env: ProjectEnvironment, task: str, limit: int = 6) -> list[dict]:
     """Score files by overlap of task terms with path, symbols and imports. Returns reasons."""
-    tt = _terms(task)
+    # drop terms shared by most files (e.g. the package name): they carry no signal
+    n = max(1, len(env.files))
+    df: Counter = Counter()
+    for f in env.files:
+        df.update(_terms(f.path.replace("/", " ").replace(".", " ")) | _terms(" ".join(f.symbols)))
+    tt = {t for t in _terms(task) if df[t] / n <= 0.5 or n < 4}
     idents = {w for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", task) if "_" in w or re.search(r"[a-z][A-Z]", w)}
     scored = []
     for f in env.files:
@@ -423,7 +428,8 @@ def select_relevant_files(env: ProjectEnvironment, task: str, limit: int = 6) ->
         if score:
             scored.append({"path": f.path, "score": score, "reasons": reasons, "is_test": f.is_test})
     scored.sort(key=lambda x: -x["score"])
-    chosen = [s for s in scored if not s["is_test"]][:limit]
+    top = scored[0]["score"] if scored else 0
+    chosen = [s for s in scored if not s["is_test"] and s["score"] >= 0.4 * top][:limit]
     # add tests that reference chosen modules
     chosen_mods = {Path(c["path"]).stem for c in chosen}
     for f in env.files:

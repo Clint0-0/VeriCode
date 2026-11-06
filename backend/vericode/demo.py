@@ -1,0 +1,95 @@
+"""Reproducible hackathon demos from the command line.
+
+    python -m vericode.demo 1          # Pre-flight API detection + implementation + tests
+    python -m vericode.demo 2 [--live] # Stale-answer detection (fixture by default; --live uses Tavily)
+    python -m vericode.demo 3 [--runs N]  # Baseline vs VeriCode benchmark
+"""
+from __future__ import annotations
+
+import argparse
+import json
+
+from . import db, stale
+from .agent import TaskRunner, create_task, load_catalog
+from .benchmark import run_benchmark
+from .config import ROOT, settings
+
+
+def demo1() -> None:
+    t = next(x for x in load_catalog() if x["id"] == "users")
+    project = (ROOT / "demos" / t["project"]).resolve()
+    print(f"provider={settings.effective_provider()}  tavily={'configured' if settings.tavily_api_key else 'NOT configured'}")
+    tid = create_task(project, t["prompt"], "vericode")
+    r = TaskRunner(tid, project, t["prompt"], "vericode", acceptance=t["acceptance_tests"]).run()
+    pf = db.loads(db.row("SELECT preflight_json FROM tasks WHERE id=?", (tid,))["preflight_json"], {})
+    print("\n== Installed dependencies ==")
+    for d in pf["environment"]["dependencies"]:
+        print(f"  {d['name']}: declared {d['declared']}  installed {d['installed']}")
+    print("\n== Planned API skeleton ==")
+    for p in pf["skeleton"]["packages"]:
+        for a in p["planned_apis"]:
+            print(f"  {a['import_path']}.{a['name']}({', '.join(a['arguments'])})  [plan assumed {p['assumed_version']}]")
+    print("\n== Verification ==")
+    for f in pf["findings"]:
+        print(f"  {f['status']:<15} {f['planned_api']:<28} risk={f['risk_score']:<3} {f['explanation'][:110]}")
+        if f.get("live"):
+            print(f"      live: {f['live']['status']} {f['live'].get('detail', '')[:90]}")
+    print("\n" + pf["briefing"])
+    print("\n== Result ==")
+    print(f"  success={r.get('success')} first_pass={r.get('first_pass_success')} repairs={r.get('repair_attempts')} tokens={r['tokens']['total']} ({r['tokens']['measurement']})")
+    print(r.get("diff", r.get("error")))
+    for c in r.get("checks", {}).get("results", []):
+        print(f"  {c['command']} -> exit {c['returncode']}  ({c['isolation']})\n  {c['stdout'].strip().splitlines()[-1] if c['stdout'].strip() else ''}")
+
+
+def demo2(live: bool) -> None:
+    d = json.loads((ROOT / "demos" / "stale_fixtures" / "demo2.json").read_text())
+    res = stale.analyze(d["answer"], mode="live" if live else "fixture")
+    print(f"evidence mode: {res['summary']['evidence_mode']}  (tavily configured: {res['summary']['tavily_configured']})\n")
+    for c in res["claims"]:
+        cl = c["claim"]
+        print(f"[{c['status']}] {cl['claim']}")
+        print(f"   category={cl['category']} volatility={cl['volatility']} freshness={c['freshness']} confidence={c['confidence']}")
+        print(f"   {c['explanation'][:200]}")
+        for e in c["evidence"]:
+            if e["outcome"] in ("support", "contradict"):
+                print(f"   - {e['outcome']}: {e['url']} (published {e['published_date']}, origin {e['origin']})")
+    corr = stale.corrected_answer(res["id"])
+    print("\nCorrected answer:\n  " + corr["corrected"])
+    for ci in corr["citations"]:
+        print(f"  [{ci['n']}] {ci['url']} ({ci['origin']})")
+
+
+def demo3(runs: int) -> None:
+    res = run_benchmark(runs=runs)
+    print(f"provider={res['provider']} measurement={res['measurement']} runs/mode={runs} repair budget={res['repair_budget']}\n")
+    for t in res["tasks"]:
+        b, v = t["summary"]["baseline"], t["summary"]["vericode"]
+        print(t["title"])
+        print(f"  baseline : tokens {b['total_tokens']['mean']} ± {b['total_tokens']['stdev']}  success {b['success_rate']:.0%}  first-pass {b['first_pass_rate']:.0%}  repairs {b['repair_attempts']['mean']}  calls {b['llm_calls']['mean']}")
+        print(f"  vericode : tokens {v['total_tokens']['mean']} ± {v['total_tokens']['stdev']}  success {v['success_rate']:.0%}  first-pass {v['first_pass_rate']:.0%}  repairs {v['repair_attempts']['mean']}  calls {v['llm_calls']['mean']}")
+        print(f"  savings  : {t['token_savings_pct']}%" if t["savings_valid"] else f"  savings  : n/a - {t['savings_note']}")
+        if t["detection"]["detection_rate"] is not None:
+            print(f"  detection rate {t['detection']['detection_rate']}, false-positive rate {t['detection']['false_positive_rate']}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("demo", choices=["1", "2", "3", "all"])
+    ap.add_argument("--live", action="store_true")
+    ap.add_argument("--runs", type=int, default=1)
+    a = ap.parse_args()
+    db.init_db()
+    if a.demo in ("1", "all"):
+        print("#" * 20, "DEMO 1 - PRE-FLIGHT API DETECTION", "#" * 20)
+        demo1()
+    if a.demo in ("2", "all"):
+        print("\n" + "#" * 20, "DEMO 2 - STALE-ANSWER DETECTION", "#" * 20)
+        demo2(a.live)
+    if a.demo in ("3", "all"):
+        print("\n" + "#" * 20, "DEMO 3 - TOKEN-EFFICIENT AGENT vs BASELINE", "#" * 20)
+        demo3(a.runs)
+
+
+if __name__ == "__main__":
+    main()
