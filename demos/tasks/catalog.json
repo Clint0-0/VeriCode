@@ -23,5 +23,20 @@
       "tests/test_summary.py": "summary/test_summary.py"
     },
     "expected_findings": {}
+  },
+  {
+    "id": "signup",
+    "title": "Demo 1b - TypeScript zod signup schema (deprecated + mistyped call planned)",
+    "project": "ts_project",
+    "prompt": "Create src/signup.ts exporting a zod schema named Signup with a required username (at least 3 characters) and an email field validated as an email address.",
+    "acceptance_tests": {
+      "tests/signup.test.ts": "signup/signup.test.ts"
+    },
+    "expected_findings": {
+      "zod:z": "ok",
+      "zod:ZodString.nonempty": "problem",
+      "zod:ZodString.min": "problem",
+      "zod:ZodString.email": "ok"
+    }
   }
 ]

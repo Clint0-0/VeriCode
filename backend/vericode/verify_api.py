@@ -129,6 +129,8 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
             f.add_risk("unverifiable", "node_modules not present")
             f.explanation = "node_modules not installed; cannot verify exports."
             return f
+        if jsinspect.ts_checker_available():
+            return _apply_rule(_verify_ts(env, pkg, api, f))
         info = jsinspect.resolve(Path(env.node_modules), api.import_path, api.name if api.type != "module" else "")
         f.verification_method.append(info.method)
         f.local = info.to_dict()
@@ -177,6 +179,75 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
         f.verification_confidence = "medium" if uncertain or info.note else "high"
         f.explanation = f"Found at {info.location}" + (f" ({info.note})" if info.note else "")
     return _apply_rule(f)
+
+
+TS_ARITY = {2554, 2555, 2556, 2575}
+TS_TYPE = {2345, 2322, 2769, 2559, 2353}
+
+
+def _verify_ts(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f: APIFinding) -> APIFinding:
+    """TypeScript compiler-API verification: module resolution (export maps, types), named/default exports,
+    class/interface/namespace members, signatures (required/optional/rest, generics) and a real type-check
+    of the planned call when the planner supplied TypeScript argument expressions."""
+    parts = api.name.split(".", 1) if api.type != "module" else ["", ""]
+    name, member = parts[0], (parts[1] if len(parts) > 1 else "")
+    args = api.arguments if api.type in ("function", "method", "class", "decorator") else None
+    r = jsinspect.ts_compiler_check(Path(env.root), api.import_path, name, member, args)
+    f.verification_method.append("typescript_compiler_api")
+    f.local = {"location": r.get("location"), "resolved_file": r.get("resolved_file"), "package": r.get("package"),
+               "export_kind": r.get("export_kind"), "kind": r.get("kind"), "signatures": r.get("signatures", []),
+               "construct_signatures": r.get("construct_signatures", []), "deprecated": r.get("deprecated"),
+               "call_check": r.get("call_check"), "similar_exports": r.get("similar_exports"), "error": r.get("error"),
+               "method": "typescript_compiler_api"}
+    if r.get("error") and r.get("resolved") and r.get("member_found") is not False and not r.get("found"):
+        f.status = "UNCERTAIN"
+        f.add_risk("unverifiable", r["error"])
+        f.explanation = f"TypeScript check could not complete: {r['error']}"
+        return f
+    if not r.get("resolved"):
+        f.status, f.api_compatibility, f.verification_confidence = "NOT_FOUND", "incompatible", "high"
+        f.add_risk("not_found", r.get("error") or "module not resolvable")
+        f.explanation = r.get("error") or f"module {api.import_path} cannot be resolved"
+        return f
+    if not r.get("found"):
+        f.status, f.api_compatibility, f.verification_confidence = "NOT_FOUND", "incompatible", "high"
+        what = f"{name}.{member}" if member else name
+        why = r.get("error") or f"`{what}` is not exported by {api.import_path} {f.installed_version}"
+        f.add_risk("not_found", why)
+        f.explanation = why
+        if r.get("similar_exports"):
+            f.suggested_correction = "similar exports: " + ", ".join(r["similar_exports"])
+        return f
+    cc = r.get("call_check") or {}
+    diags = cc.get("diagnostics") or []
+    sigs = r.get("signatures") or r.get("construct_signatures") or []
+    f.argument_checks = []
+    if args is not None and cc:
+        if not diags:
+            f.argument_checks.append({"argument": cc.get("source", ""), "status": "supported", "detail": "call type-checks against installed declarations"})
+        for d in diags:
+            kind = "rejected" if d["code"] in TS_ARITY else "unsupported" if d["code"] in TS_TYPE else "unsupported"
+            f.argument_checks.append({"argument": cc.get("source", ""), "status": kind, "detail": f"TS{d['code']}: {d['message']}"})
+            f.add_risk("rejected_argument" if d["code"] in TS_ARITY else "unsupported_argument", f"TS{d['code']}: {d['message']}")
+    if r.get("deprecated"):
+        f.add_risk("deprecated", r["deprecated"])
+    if diags:
+        f.status, f.api_compatibility, f.verification_confidence = "INCOMPATIBLE", "incompatible", "high"
+        f.explanation = "Planned call does not type-check against installed declarations: " + "; ".join(f"TS{d['code']}: {d['message']}" for d in diags)
+        if sigs:
+            f.suggested_correction = "installed signature: " + " | ".join(s["text"] for s in sigs[:3])
+    elif r.get("deprecated"):
+        f.status, f.api_compatibility, f.verification_confidence = "DEPRECATED", "deprecated", "high"
+        f.explanation = f"Marked @deprecated in installed {f.package} {f.installed_version}: {r['deprecated']}"
+        f.suggested_correction = r["deprecated"]
+    elif any(x["factor"] == "assumed_major_mismatch" for x in f.risk_factors):
+        f.status, f.api_compatibility, f.verification_confidence = "STALE", "compatible", "medium"
+        f.explanation = f"Exists at {r.get('location')}, but the plan targeted {f.package} {f.assumed_version} while {f.installed_version} is installed."
+    else:
+        f.status, f.api_compatibility = "VERIFIED_LOCAL", "compatible"
+        f.verification_confidence = "high" if (args is not None and cc) else "medium"
+        f.explanation = f"Found at {r.get('location')}" + ("; planned call type-checks" if cc and not diags else "; existence and signature only (no call to type-check)")
+    return f
 
 
 def _js_args(info, args: list[str]) -> list[dict]:

@@ -13,3 +13,4 @@ demos/_runs/
 *.db-shm
 *.db-wal
 .vericode_token
+tools/ts-checker/node_modules/

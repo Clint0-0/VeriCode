@@ -130,6 +130,12 @@ def test_conflicting_sources(tmp_path):
     assert c["status"] == "CONFLICTING_EVIDENCE" and c["confidence_breakdown"]["conflict_penalty"] == -30
 
 
+def test_absence_of_support_is_never_contradiction(tmp_path):
+    unrelated = dict(SRC_PRICE_NEW, content="ChatGPT Plus subscribers get access to new features.")
+    r = run(tmp_path, "ChatGPT Plus currently includes priority access during peak times.", [unrelated])
+    assert r["claims"][0]["status"] == "UNVERIFIED" and r["claims"][0]["missing_evidence"]
+
+
 def test_insufficient_evidence_topic_only(tmp_path):
     topic_only = dict(SRC_PRICE_NEW, content="ChatGPT Plus pricing page lists several plans for subscribers.")
     r = run(tmp_path, "ChatGPT Plus costs $20 per month.", [topic_only])
@@ -168,7 +174,10 @@ def test_demo2_fixture_end_to_end():
     d = json.loads((ROOT / "demos" / "stale_fixtures" / "demo2.json").read_text())
     r = stale.analyze(d["answer"], mode="fixture", now=NOW)
     st = [c["status"] for c in r["claims"]]
-    assert st == ["CONTRADICTED", "CURRENT_SUPPORTED", "UNVERIFIED", "NOT_APPLICABLE"]
+    assert st == ["CONTRADICTED", "CURRENT_SUPPORTED", "CURRENT_SUPPORTED", "CONTRADICTED", "UNVERIFIED", "NOT_APPLICABLE"]
+    semantic_ok, semantic_neg = r["claims"][2], r["claims"][3]
+    assert semantic_ok["evidence"][0]["method"] == "lexical" and semantic_ok["freshness"] is None  # docs page has no date
+    assert semantic_neg["correction"] is None and "no replacement" in semantic_neg["missing_evidence"]
     assert stale.load_analysis(r["id"])["claims"][0]["evidence"]
 
 

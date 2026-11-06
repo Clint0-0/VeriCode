@@ -344,7 +344,10 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
     inst_node = installed_node(nm) if nm.is_dir() else {}
 
     deps: list[Dependency] = []
-    for (eco, name) in sorted(set(declared) | set(resolved)):
+    # lockfiles list transitive packages too: report resolved versions only for declared dependencies
+    # (unless there is no manifest at all, then the lockfile is the only source)
+    keys = set(declared) if declared else set(resolved)
+    for (eco, name) in sorted(keys):
         d = Dependency(name=name, ecosystem=eco)
         if (eco, name) in declared:
             d.declared, d.declared_in = declared[(eco, name)]

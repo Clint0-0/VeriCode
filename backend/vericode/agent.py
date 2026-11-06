@@ -315,6 +315,8 @@ class TaskRunner:
                 self.event("test", "Checks passed" if checks["passed"] else "Checks failed", {"passed": checks["passed"]})
                 if checks["passed"]:
                     break
+                if not checks.get("validated") and changed and not errs:
+                    break  # no tests to repair against: stop and report partial (unvalidated)
                 if attempt == self.max_repairs:
                     break
                 stage = "repair"

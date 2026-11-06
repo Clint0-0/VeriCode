@@ -1,0 +1,36 @@
+{
+  "_notice": "SYNTHETIC FIXTURE: invented example sources on reserved example domains, used only to exercise conflicting-evidence handling in tests.",
+  "answer": "The Acme Cloud Pro plan costs $30 per month.",
+  "sources": [
+    {
+      "title": "Acme Cloud pricing (synthetic)",
+      "url": "https://pricing.example.com/acme",
+      "published_date": null,
+      "synthetic": true,
+      "keywords": [
+        "acme",
+        "cloud",
+        "pro",
+        "plan",
+        "pricing"
+      ],
+      "min_match": 2,
+      "content": "The Acme Cloud Pro plan costs $30 per month for each workspace."
+    },
+    {
+      "title": "Acme Cloud plans compared (synthetic)",
+      "url": "https://docs.example.org/acme-plans",
+      "published_date": "2026-09-01",
+      "synthetic": true,
+      "keywords": [
+        "acme",
+        "cloud",
+        "pro",
+        "plan",
+        "pricing"
+      ],
+      "min_match": 2,
+      "content": "The Acme Cloud Pro plan costs $35 per month after the latest change."
+    }
+  ]
+}

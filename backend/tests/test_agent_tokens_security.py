@@ -225,5 +225,5 @@ def test_api_end_to_end(sample_project, client):
     assert c.post(f"/api/stale/{a['id']}/correct").json()["changes"]
     assert c.get(f"/api/evidence?analysis_id={a['id']}").json()
     assert c.post("/api/stale/analyze", json={"answer": "x" * 30000}).status_code == 422
-    assert c.get("/api/dashboard").json()["claims_checked"] == 4
+    assert c.get("/api/dashboard").json()["claims_checked"] == 6
     assert c.get("/api/tasks/nope").status_code == 404

@@ -7,6 +7,7 @@ installed, a TS-compiler-API check (node subprocess, timeout) type-checks the pl
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -193,3 +194,33 @@ def tsc_check(project_root: Path, snippet: str, timeout: int = 30) -> dict:
         return {"available": True, "diagnostics": json.loads(p.stdout or "[]")}
     except Exception as e:
         return {"available": True, "error": str(e)}
+
+
+# ----------------------------------------------------------------------------- TypeScript compiler API
+CHECKER = Path(__file__).resolve().parents[2] / "tools" / "ts-checker" / "check.cjs"
+
+
+def ts_checker_available() -> bool:
+    return bool(shutil.which("node")) and CHECKER.exists() and (CHECKER.parent / "node_modules" / "typescript").is_dir()
+
+
+def ts_compiler_check(project_root: Path, module: str, name: str, member: str = "", args: list[str] | None = None,
+                      timeout: int = 45) -> dict:
+    """Resolve the module with the project's node_modules and check exports, signatures, @deprecated and
+    (when `args` are given as TypeScript expressions) the actual call with the TypeScript type checker.
+    Runs VeriCode's pinned TypeScript in a subprocess (scrubbed env, timeout); the user project is not modified."""
+    if not ts_checker_available():
+        return {"available": False, "error": "TypeScript checker not installed (run scripts/setup.sh: npm ci in tools/ts-checker)"}
+    payload = {"projectRoot": str(project_root), "module": module, "name": name, "member": member}
+    if args is not None:
+        payload["args"] = [a for a in args if isinstance(a, str)][:10]
+    try:
+        p = subprocess.run([shutil.which("node"), str(CHECKER)], input=json.dumps(payload), capture_output=True, text=True,
+                           timeout=timeout, cwd=str(project_root), env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "NODE_OPTIONS": "--max-old-space-size=1024"})
+        out = json.loads(p.stdout or "{}")
+        out["available"] = True
+        return out
+    except subprocess.TimeoutExpired:
+        return {"available": True, "error": f"TypeScript check timed out after {timeout}s"}
+    except (ValueError, OSError) as e:
+        return {"available": True, "error": f"TypeScript checker failed: {e}"}

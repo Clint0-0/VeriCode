@@ -122,7 +122,7 @@ def _check_allowed(argv: list[str]) -> None:
 
 def _limits() -> None:  # pragma: no cover - runs in child
     resource.setrlimit(resource.RLIMIT_CPU, (300, 300))
-    resource.setrlimit(resource.RLIMIT_AS, (4 * 1024**3, 4 * 1024**3))
+    # no RLIMIT_AS: V8/WebAssembly reserve large virtual ranges; real memory caps come from the docker backend
     resource.setrlimit(resource.RLIMIT_FSIZE, (200 * 1024**2, 200 * 1024**2))
     os.setsid()
 
@@ -271,8 +271,22 @@ def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, P
     for rel, host in ro_mounts.items():
         if host.exists():
             cmd += ["-v", f"{host.resolve()}:/work/{rel}:ro"]
+            if rel == "node_modules":  # tools write caches under node_modules/.vite etc: give them a tmpfs
+                for cache in (".vite", ".cache"):
+                    try:
+                        (host / cache).mkdir(exist_ok=True)
+                        cmd += ["--tmpfs", f"/work/node_modules/{cache}:size=64m,mode=1777"]
+                    except OSError:
+                        pass
+    extra_path = ""
+    node = shutil.which("node")
+    if node:
+        node_root = Path(node).resolve().parents[1]
+        if not str(node_root).startswith("/usr"):
+            cmd += ["-v", f"{node_root}:{node_root}:ro"]  # node toolchain outside /usr (e.g. /opt/node22)
+            extra_path = f"{node_root}/bin:"
     cmd += ["-w", "/work", "-e", "HOME=/tmp", "-e", "CI=1", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "LANG=C.UTF-8",
-            "-e", "PATH=/work/.venv/bin:/work/node_modules/.bin:/usr/local/bin:/usr/bin:/bin", SANDBOX_IMAGE]
+            "-e", f"PATH=/work/.venv/bin:/work/node_modules/.bin:{extra_path}/usr/local/bin:/usr/bin:/bin", SANDBOX_IMAGE]
     inner = list(argv)
     if Path(inner[0]).name in ("python", "pytest") and ".venv" in ro_mounts:
         inner[0] = f"/work/.venv/bin/{Path(inner[0]).name}"

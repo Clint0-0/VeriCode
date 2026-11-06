@@ -15,10 +15,14 @@ NO_SCRIPT = "MOCK_PROVIDER_NO_SCRIPT: the scripted mock provider only supports t
 
 def _task_kind(prompt: str) -> str | None:
     head = prompt.split("TASK:", 1)[-1][:800].lower()
+    if "signup" in head and "zod" in head:
+        return "signup"
     if "user" in head and "username" in head:
         return "users"
     if "priority_summary" in head:
         return "summary"
+    if "signup" in head and "zod" in head:
+        return "signup"
     return None
 
 
@@ -37,12 +41,23 @@ def respond(stage: str, system: str, prompt: str) -> str:
                 "documentation_needed": ["pydantic validators", "Field constraints"]}], "notes": "v1-style plan"})
         if kind == "summary":
             return json.dumps({"packages": [], "notes": "No third-party APIs needed; uses project-local Task/Priority."})
+        if kind == "signup":
+            return json.dumps({"packages": [{
+                "package": "zod", "ecosystem": "node", "installed_version": None, "assumed_version": "3.20",
+                "planned_apis": [
+                    {"import_path": "zod", "name": "z", "type": "attribute", "arguments": [], "purpose": "schema builder namespace"},
+                    {"import_path": "zod", "name": "ZodString.nonempty", "type": "method", "arguments": [], "purpose": "username required", "version_sensitive": True},
+                    {"import_path": "zod", "name": "ZodString.min", "type": "method", "arguments": ["\"3\""], "purpose": "username length", "version_sensitive": True},
+                    {"import_path": "zod", "name": "ZodString.email", "type": "method", "arguments": [], "purpose": "email format"},
+                ]}], "notes": "zod schema"})
         return NO_SCRIPT
     if stage in ("coder", "repair"):
         if kind == "users":
             return _users_code(prompt)
         if kind == "summary":
             return _summary_code()
+        if kind == "signup":
+            return _signup_code(prompt)
         return NO_SCRIPT
     return NO_SCRIPT
 
@@ -95,3 +110,23 @@ def _summary_code() -> str:
         "        return counts\n"
         ">>>>>>> REPLACE\n"
     )
+
+
+def _signup_code(prompt: str) -> str:
+    # an LLM with older zod habits writes .nonempty() and min("3") unless told otherwise
+    fixed_min = "TS2345" in prompt or "minLength: number" in prompt
+    fixed_nonempty = "min(1) instead" in prompt or "nonempty" in prompt and "deprecated" in prompt.lower()
+    username = "z.string()" + (".min(1)" if fixed_nonempty else ".nonempty()") + (".min(3)" if fixed_min else '.min("3")')
+    code = (
+        "import { z } from 'zod'\n\n"
+        "export const Signup = z.object({\n"
+        f"  username: {username},\n"
+        "  email: z.string().email(),\n"
+        "})\n\n"
+        "export type Signup = z.infer<typeof Signup>\n"
+    )
+    cur_marker = "CURRENT CONTENT OF src/signup.ts:\n"
+    if cur_marker in prompt:
+        cur = prompt.split(cur_marker, 1)[1].split("\n<<<END FILE>>>", 1)[0]
+        return "Updating signup schema.\n\nFILE: src/signup.ts\n<<<<<<< SEARCH\n" + cur + "\n=======\n" + code + ">>>>>>> REPLACE\n"
+    return "Adding signup schema.\n\nFILE: src/signup.ts\n<<<<<<< SEARCH\n=======\n" + code + ">>>>>>> REPLACE\n"
