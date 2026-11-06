@@ -22,7 +22,7 @@ export default function Evidence({ param }: { param?: string }) {
             <tbody>{rows.map((e) => (
               <tr key={e.id} className="border-t border-ink-700 align-top">
                 <td className="max-w-xs px-2 py-2 text-slate-300">{e.claim}</td>
-                <td className="max-w-[14rem] px-2 py-2"><a className="text-sky-300 hover:underline" href={e.url} target="_blank" rel="noreferrer noopener">{e.title || e.url}</a> <Badge tone={e.origin === 'fixture' ? 'amber' : 'blue'}>{e.origin}</Badge></td>
+                <td className="max-w-[14rem] px-2 py-2"><a className="text-sky-300 hover:underline" href={e.url} target="_blank" rel="noreferrer noopener">{e.title || e.url}</a> <Badge tone={e.origin?.startsWith('fixture') ? 'amber' : 'blue'}>{e.origin}</Badge></td>
                 <td className="px-2 py-2 text-slate-400">{e.domain}<br />{e.source_type} ({e.authority})</td>
                 <td className="whitespace-nowrap px-2 py-2 text-slate-400">{e.retrieved_at}</td>
                 <td className="whitespace-nowrap px-2 py-2 text-slate-400">{e.published_date ?? 'unknown'}</td>

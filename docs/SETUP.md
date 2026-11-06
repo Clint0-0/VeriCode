@@ -1,7 +1,8 @@
 # Setup, running and testing
 
-**Requirements:** Python ≥ 3.11 (tested 3.13), Node ≥ 20 (tested 22), Linux/macOS. `unshare` (util-linux) enables
-network-isolated test runs on Linux.
+**Requirements:** Python ≥ 3.11 (tested 3.13), Node ≥ 20 (tested 22), Linux/macOS. Docker (recommended) enables the
+container sandbox. No image pull is needed; VeriCode builds a tiny local base image. Without Docker, `unshare`
+(util-linux) gives network-isolated process runs on Linux.
 
 ```bash
 scripts/setup.sh        # creates .venv, demos/sample_project/.venv (pydantic==2.9.2 + pytest), builds frontend, copies .env.example → .env
@@ -18,13 +19,24 @@ cd frontend && npm install && npm run build
 (+ `OPENAI_BASE_URL` for compatible gateways), plus `VERICODE_CODER_MODEL` (and optionally `VERICODE_PLANNER_MODEL`,
 e.g. a smaller model). No model ids are hardcoded.
 
-**Database:** SQLite at `./vericode.db` (override with `VERICODE_DB`). The schema is created automatically on startup
-(`db.init_db()`, idempotent `CREATE TABLE IF NOT EXISTS`). To reset, delete the file.
+**Database:** SQLite at `./vericode.db` (override with `VERICODE_DB`). The schema is created on startup, and
+versioned migrations (`db.MIGRATIONS`, tracked in `schema_version`) are applied in order. Settings changed in the UI
+are stored in the `settings` table and reloaded on start. Task history, analyses, evidence, rules and benchmarks
+survive restarts. To reset, delete the file.
 
 **Run:** `scripts/run.sh` (API + built UI on :8000). Dev UI: `cd frontend && npm run dev` (:5173).
 
 **Add your own workspace:** put or symlink the project under `demos/` (or set `VERICODE_WORKSPACES`) with its
 virtualenv at `.venv` and/or `node_modules` installed, so installed versions can be read.
+
+**Login:** `scripts/run.sh` prints `http://127.0.0.1:8000/?token=…`. Set `VERICODE_AUTH_TOKEN` for a fixed token.
+API scripts can send `Authorization: Bearer <token>`.
+
+**Live integration tests** (real network and credentials, never mocked):
+`VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest backend/tests -m live`. They are skipped automatically when
+`TAVILY_API_KEY`, or an LLM key plus `VERICODE_CODER_MODEL`, are missing.
+
+**Sandbox test matrix:** `VERICODE_TEST_SANDBOX=docker scripts/test.sh` runs every agent test inside containers.
 
 **Tests:** `scripts/test.sh`
 - backend: `.venv/bin/python -m pytest -q backend/tests` (dependency, API-verification, Tavily, stale-answer, agent,

@@ -9,6 +9,11 @@
 **Held constant:** provider and model configuration, task prompt, pristine repository copy per run, acceptance
 tests (copied into the sandbox from `demos/tasks/`), validation commands, and repair budget (`max_repairs`, default 3).
 
+**Measurement classes:** every LLM call is labelled `ACTUAL_PROVIDER_USAGE` (usage returned by the provider API),
+`ESTIMATED` (real provider, usage missing → chars/4) or `MOCK` (scripted offline provider). A run or benchmark takes
+the weakest label among its calls. The UI and `/api/benchmarks` keep `ACTUAL_PROVIDER_USAGE` results separate
+from mock and estimated results.
+
 **Counted:** every LLM call, recorded per stage (`planner`, `coder`, `repair`, and `claim_extraction`/`claim_judge`
 if used) with input and output separated. Provider-reported usage is used when the API returns it
 (Anthropic `usage.input_tokens/output_tokens` including cache read/creation; OpenAI
@@ -17,6 +22,9 @@ if used) with input and output separated. Provider-reported usage is used when t
 
 **Savings** = `(baseline_mean_total − vericode_mean_total) / baseline_mean_total × 100`, per task, computed
 **only if every run of both modes succeeded**. Otherwise the result reads `n/a` with the reason.
+
+**Aggregates:** per-task mean ± sd (min/max, n), per-run paired savings, verification-overhead tokens (planner and
+judge stages), and the average savings across comparable tasks with its spread.
 
 **Also reported:** final and first-pass success rates, repair attempts, LLM calls, search calls, duration
 (mean ± sd, min/max, n), tokens by stage, and API-incompatibility detection rate / false-positive rate against

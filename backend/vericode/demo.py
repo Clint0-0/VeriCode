@@ -15,10 +15,14 @@ from .benchmark import run_benchmark
 from .config import ROOT, settings
 
 
-def demo1() -> None:
-    t = next(x for x in load_catalog() if x["id"] == "users")
+def demo1(task_id: str = "users") -> None:
+    from .llm import provider_status
+    from .security import sandbox_backend
+    t = next(x for x in load_catalog() if x["id"] == task_id)
     project = (ROOT / "demos" / t["project"]).resolve()
-    print(f"provider={settings.effective_provider()}  tavily={'configured' if settings.tavily_api_key else 'NOT configured'}")
+    ps = provider_status()
+    print(f"provider={ps['provider']} (ready={ps['ready']}{', missing: ' + ', '.join(ps['missing']) if ps['missing'] else ''})  "
+          f"tavily={'configured' if settings.tavily_api_key else 'NOT configured (TAVILY_API_KEY)'}  sandbox={sandbox_backend()}")
     tid = create_task(project, t["prompt"], "vericode")
     r = TaskRunner(tid, project, t["prompt"], "vericode", acceptance=t["acceptance_tests"]).run()
     pf = db.loads(db.row("SELECT preflight_json FROM tasks WHERE id=?", (tid,))["preflight_json"], {})
@@ -36,7 +40,7 @@ def demo1() -> None:
             print(f"      live: {f['live']['status']} {f['live'].get('detail', '')[:90]}")
     print("\n" + pf["briefing"])
     print("\n== Result ==")
-    print(f"  success={r.get('success')} first_pass={r.get('first_pass_success')} repairs={r.get('repair_attempts')} tokens={r['tokens']['total']} ({r['tokens']['measurement']})")
+    print(f"  outcome={r.get('outcome')} first_pass={r.get('first_pass_success')} repairs={r.get('repair_attempts')} tokens={r['tokens']['total']} ({r['tokens']['measurement']})")
     print(r.get("diff", r.get("error")))
     for c in r.get("checks", {}).get("results", []):
         print(f"  {c['command']} -> exit {c['returncode']}  ({c['isolation']})\n  {c['stdout'].strip().splitlines()[-1] if c['stdout'].strip() else ''}")
@@ -45,12 +49,16 @@ def demo1() -> None:
 def demo2(live: bool) -> None:
     d = json.loads((ROOT / "demos" / "stale_fixtures" / "demo2.json").read_text())
     res = stale.analyze(d["answer"], mode="live" if live else "fixture")
-    print(f"evidence mode: {res['summary']['evidence_mode']}  (tavily configured: {res['summary']['tavily_configured']})\n")
+    s = res["summary"]
+    print(f"evidence mode: {s['evidence_mode']}  (tavily configured: {s['tavily_configured']}, searches {s['search_calls']}, "
+          f"credits {s.get('search_credits')})  extraction: {s.get('extraction')}  judge: {s.get('llm_judge')}\n")
     for c in res["claims"]:
         cl = c["claim"]
         print(f"[{c['status']}] {cl['claim']}")
         print(f"   category={cl['category']} volatility={cl['volatility']} freshness={c['freshness']} confidence={c['confidence']}")
         print(f"   {c['explanation'][:200]}")
+        if c.get("missing_evidence"):
+            print(f"   missing evidence: {c['missing_evidence']}")
         for e in c["evidence"]:
             if e["outcome"] in ("support", "contradict"):
                 print(f"   - {e['outcome']}: {e['url']} (published {e['published_date']}, origin {e['origin']})")
@@ -62,20 +70,23 @@ def demo2(live: bool) -> None:
 
 def demo3(runs: int) -> None:
     res = run_benchmark(runs=runs)
-    print(f"provider={res['provider']} measurement={res['measurement']} runs/mode={runs} repair budget={res['repair_budget']}\n")
+    if res.get("average_savings_pct") is not None:
+        print(f"average savings over {res['comparable_tasks']}/{res['total_tasks']} comparable tasks: {res['average_savings_pct']}%")
+    print(f"provider={res['provider']} model={res.get('coder_model')} measurement={res['measurement']} runs/mode={runs} repair budget={res['repair_budget']}\n")
     for t in res["tasks"]:
         b, v = t["summary"]["baseline"], t["summary"]["vericode"]
         print(t["title"])
         print(f"  baseline : tokens {b['total_tokens']['mean']} ± {b['total_tokens']['stdev']}  success {b['success_rate']:.0%}  first-pass {b['first_pass_rate']:.0%}  repairs {b['repair_attempts']['mean']}  calls {b['llm_calls']['mean']}")
         print(f"  vericode : tokens {v['total_tokens']['mean']} ± {v['total_tokens']['stdev']}  success {v['success_rate']:.0%}  first-pass {v['first_pass_rate']:.0%}  repairs {v['repair_attempts']['mean']}  calls {v['llm_calls']['mean']}")
         print(f"  savings  : {t['token_savings_pct']}%" if t["savings_valid"] else f"  savings  : n/a - {t['savings_note']}")
+        print(f"  verification overhead (vericode): {v['verification_overhead_tokens']['mean']} tokens")
         if t["detection"]["detection_rate"] is not None:
             print(f"  detection rate {t['detection']['detection_rate']}, false-positive rate {t['detection']['false_positive_rate']}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("demo", choices=["1", "2", "3", "all"])
+    ap.add_argument("demo", choices=["1", "1b", "2", "3", "all"])
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--runs", type=int, default=1)
     a = ap.parse_args()
@@ -83,6 +94,9 @@ def main() -> None:
     if a.demo in ("1", "all"):
         print("#" * 20, "DEMO 1 - PRE-FLIGHT API DETECTION", "#" * 20)
         demo1()
+    if a.demo in ("1b", "all"):
+        print("\n" + "#" * 20, "DEMO 1b - TYPESCRIPT PRE-FLIGHT (zod)", "#" * 20)
+        demo1("signup")
     if a.demo in ("2", "all"):
         print("\n" + "#" * 20, "DEMO 2 - STALE-ANSWER DETECTION", "#" * 20)
         demo2(a.live)

@@ -135,6 +135,7 @@ class StaleReq(BaseModel):
     urls: list[str] = Field(default=[], max_length=5)
     preferred_domains: list[str] = Field(default=[], max_length=10)
     mode: Literal["live", "fixture"] = "live"
+    llm_extraction: bool = False
 
 
 class BenchReq(BaseModel):
@@ -152,15 +153,39 @@ class RuleUpdate(BaseModel):
 
 
 # ------------------------------------------------------------------ system
+def integrations() -> dict:
+    from . import jsinspect, security
+    ps = llm.provider_status()
+    try:
+        backend, backend_err = security.sandbox_backend(), None
+    except SecurityError as e:
+        backend, backend_err = None, str(e)
+    return {
+        "llm": ps,
+        "tavily": {"configured": bool(settings.tavily_api_key), "missing": [] if settings.tavily_api_key else ["TAVILY_API_KEY"]},
+        "sandbox": {"configured": settings.sandbox_backend, "active": backend, "error": backend_err,
+                    "docker_available": security.docker_available(), "process_network_isolation": network_isolation_available()},
+        "typescript_checker": {"available": jsinspect.ts_checker_available()},
+        "auth": {"enabled": True, "host": settings.host, "allow_remote": settings.allow_remote},
+        "schema_version": db.schema_version(),
+    }
+
+
 @app.get("/api/health")
 def health():
-    return {"ok": True, "provider": settings.effective_provider(), "tavily_configured": bool(settings.tavily_api_key),
+    ps = llm.provider_status()
+    return {"ok": True, "provider": ps["provider"], "provider_ready": ps["ready"], "tavily_configured": bool(settings.tavily_api_key),
             "network_isolation": network_isolation_available(), "time": time.time()}
+
+
+@app.get("/api/integrations")
+def get_integrations():
+    return integrations()
 
 
 @app.get("/api/settings")
 def get_settings():
-    return settings.public_dict()
+    return {**settings.public_dict(), "integrations": integrations()}
 
 
 @app.put("/api/settings")
@@ -171,7 +196,7 @@ def put_settings(data: dict):
         settings.update(data)
     except (ValueError, TypeError) as e:
         raise HTTPException(400, str(e))
-    return settings.public_dict()
+    return {**settings.public_dict(), "integrations": integrations()}
 
 
 @app.get("/api/workspaces")
@@ -248,16 +273,18 @@ def create_task(req: TaskReq):
     if not path or not prompt:
         raise HTTPException(400, "path and prompt are required (or a catalog_id)")
     root = resolve_workspace(path)
-    if settings.effective_provider() == "none":
-        raise llm.LLMUnavailable("No LLM provider configured")
+    ps = llm.provider_status()
+    if not ps["ready"]:
+        raise llm.LLMUnavailable(f"LLM provider '{ps['provider']}' not ready; missing: {', '.join(ps['missing'])}")
     tid = agent.run_task_async(root, prompt, req.mode, req.max_repairs, req.live, acceptance)
     return {"task_id": tid}
 
 
 def _task_out(t: dict, full: bool = True) -> dict:
-    out = {k: t[k] for k in ("id", "project_path", "prompt", "mode", "status", "created_at", "finished_at", "success", "provider", "benchmark_id")}
+    out = {k: t.get(k) for k in ("id", "project_path", "prompt", "mode", "status", "created_at", "finished_at", "success", "provider", "benchmark_id")}
     res = db.loads(t["result_json"], {})
     out["tokens"] = res.get("tokens")
+    out["outcome"] = t.get("outcome") or res.get("outcome")
     out["changed_files"] = res.get("changed_files", [])
     out["error"] = res.get("error")
     if full:
@@ -286,6 +313,8 @@ def apply_task(tid: str):
         return agent.apply_changes(tid)
     except KeyError:
         raise HTTPException(404, "task not found")
+    except agent.ApplyConflict as e:
+        return JSONResponse({"detail": str(e), "code": "conflict", "conflicts": e.conflicts}, status_code=409)
     except ValueError as e:
         raise HTTPException(409, str(e))
 
@@ -293,7 +322,7 @@ def apply_task(tid: str):
 # ------------------------------------------------------------------ stale-answer detection
 @app.post("/api/stale/analyze")
 def stale_analyze(req: StaleReq):
-    return stale.analyze(req.answer, req.question, req.urls, req.preferred_domains, req.mode)
+    return stale.analyze(req.answer, req.question, req.urls, req.preferred_domains, req.mode, llm_extraction=req.llm_extraction)
 
 
 @app.get("/api/stale/demo")
@@ -347,7 +376,15 @@ def token_analytics():
         t["repair_attempts"] = res.get("repair_attempts")
         t["search_calls"] = res.get("search_calls")
     cache_hits = db.row("SELECT COUNT(*) n FROM cache")["n"]
+    by_measurement = db.rows("SELECT COALESCE(measurement, CASE WHEN provider='mock' THEN 'MOCK' WHEN estimated=1 THEN 'ESTIMATED' ELSE 'ACTUAL_PROVIDER_USAGE' END) measurement, "
+                             "SUM(input_tokens) input, SUM(output_tokens) output, COUNT(*) calls FROM token_usage GROUP BY 1")
+    search = db.row("SELECT COUNT(*) requests, COALESCE(SUM(cached),0) cache_hits, COALESCE(SUM(credits),0) credits, "
+                    "COALESCE(SUM(CASE WHEN status NOT IN ('ok','no_results','cache_hit') AND status NOT LIKE 'ok:%' THEN 1 ELSE 0 END),0) failures FROM search_usage")
+    for t in per_task:
+        m = db.row("SELECT GROUP_CONCAT(DISTINCT measurement) m FROM token_usage WHERE task_id=?", (t["id"],))
+        t["measurement"] = (m or {}).get("m")
     return {"by_stage": by_stage, "by_mode": by_mode, "per_task": per_task, "cache_entries": cache_hits,
+            "by_measurement": by_measurement, "search": search,
             "cost_per_mtok": {"input": settings.cost_input_per_mtok, "output": settings.cost_output_per_mtok}}
 
 
@@ -358,8 +395,9 @@ _bench_state: dict = {"running": False, "error": None}
 def start_benchmark(req: BenchReq):
     if _bench_state["running"]:
         raise HTTPException(409, "a benchmark is already running")
-    if settings.effective_provider() == "none":
-        raise llm.LLMUnavailable("No LLM provider configured")
+    ps = llm.provider_status()
+    if not ps["ready"]:
+        raise llm.LLMUnavailable(f"LLM provider '{ps['provider']}' not ready; missing: {', '.join(ps['missing'])}")
 
     def go():
         _bench_state.update(running=True, error=None)
@@ -382,7 +420,7 @@ def list_benchmarks():
 @app.get("/api/dashboard")
 def dashboard():
     q = lambda sql, p=(): db.row(sql, p)  # noqa: E731
-    tok = q("SELECT COALESCE(SUM(input_tokens+output_tokens),0) n, COALESCE(SUM(estimated),0) est, COUNT(*) calls FROM token_usage")
+    tok = q("SELECT COALESCE(SUM(input_tokens+output_tokens),0) n, COALESCE(SUM(CASE WHEN estimated=1 OR provider='mock' THEN 1 ELSE 0 END),0) est, COUNT(*) calls FROM token_usage")
     latest_bench = db.row("SELECT result_json FROM benchmarks ORDER BY created_at DESC LIMIT 1")
     return {
         "coding_tasks": q("SELECT COUNT(*) n FROM tasks WHERE mode IN ('vericode','baseline')")["n"],
@@ -395,6 +433,11 @@ def dashboard():
         "recent_tasks": [_task_out(t, full=False) for t in db.rows("SELECT * FROM tasks ORDER BY created_at DESC LIMIT 8")],
         "provider": settings.effective_provider(), "tavily_configured": bool(settings.tavily_api_key),
         "rules": q("SELECT COUNT(*) n FROM rules WHERE active=1")["n"],
+        "partial_tasks": q("SELECT COUNT(*) n FROM tasks WHERE outcome='partial'")["n"],
+        "tokens_by_measurement": db.rows("SELECT COALESCE(measurement,'UNLABELLED') measurement, SUM(input_tokens+output_tokens) tokens, COUNT(*) calls FROM token_usage GROUP BY 1"),
+        "latest_real_benchmark": next((db.loads(b["result_json"]) for b in db.rows("SELECT result_json FROM benchmarks WHERE measurement='ACTUAL_PROVIDER_USAGE' ORDER BY created_at DESC LIMIT 1")), None),
+        "search_requests": q("SELECT COUNT(*) n FROM search_usage WHERE cached=0")["n"],
+        "integrations": integrations(),
     }
 
 

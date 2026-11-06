@@ -1,110 +1,104 @@
 # VeriCode — Verify Before You Generate
 
-VeriCode checks what an AI is about to rely on before it relies on it.
+VeriCode is a verification layer that sits between an AI and what it is about to rely on. It covers two
+hackathon problem statements in one product.
 
-1. **Stale-Answer Detector (Track 1).** Paste any LLM answer. VeriCode splits it into individual claims and
-   works out which ones can go out of date (versions, prices, laws, leadership, deadlines…). It checks those
-   claims against Tavily live search and any URLs you supply, then labels each claim *supported*,
-   *potentially stale*, *contradicted*, *conflicting* or *unverified*. Every label comes with its sources.
-   Two separate scores are reported: evidence freshness and verification confidence.
-2. **Token-efficient coding agent (Track 2).** Before writing any code, a planner lists the third-party APIs
-   it intends to call. VeriCode checks each one against the package source **actually installed** in the
-   project (AST of site-packages / `.d.ts` in node_modules), and uses Tavily when the local check isn't enough.
-   It then gives the coder a compact *pre-flight briefing* plus only the relevant files. Code is generated,
-   applied in a sandbox copy, tested and repaired within a fixed budget, and every token is counted.
+**Track 1 — Stale-Answer Detector.** Paste any LLM answer. VeriCode:
+- splits it into atomic claims, each traceable to a character span of the original text;
+- classifies each claim by category, volatility, temporal sensitivity, verifiability and the evidence type it needs;
+- searches **Tavily** only for time-sensitive claims and inspects the retrieved page content;
+- decides each status with value checks, lexical/negation checks and, when a real LLM is configured, a
+  quote-validated LLM evidence judge;
+- reports `CURRENT_SUPPORTED`, `POTENTIALLY_STALE`, `CONTRADICTED`, `UNVERIFIED`, `CONFLICTING_EVIDENCE` or `NOT_APPLICABLE`;
+- gives **evidence freshness** and **verification confidence** as two separate scores, shows supporting and
+  contradicting sources side by side, and writes a cited corrected answer that never invents a fix.
 
-> **Local-first verification + live source validation + minimal context injection + real execution + measured tokens.**
+**Track 2 — Pre-Flight API & Dependency Gatekeeper + token-efficient coding agent.** Before any code is generated:
+1. A planner lists the third-party APIs it intends to call.
+2. VeriCode checks every planned import, class, method and argument against the code **actually installed** in the
+   repository. Python is checked by static AST analysis of site-packages. TypeScript/JavaScript is checked with the
+   **TypeScript compiler API** against node_modules: export maps, named and default exports, signatures, generics,
+   `@deprecated`, and a real type-check of the planned call.
+3. Tavily documentation is used only when the local check isn't enough.
+4. The coder receives a compact briefing with only the needed corrections, plus the relevant files and the project's conventions.
+5. Changes are applied in a sandbox copy (Docker, no network), tests, typecheck and lint run there, and failures are
+   repaired within a fixed budget.
+6. Every token is counted and labelled `ACTUAL_PROVIDER_USAGE`, `ESTIMATED` or `MOCK`.
 
 ## Quick start
 
 ```bash
-scripts/setup.sh                # backend venv, demo project venv (pydantic 2.9.2), frontend build, .env
-$EDITOR .env                    # add TAVILY_API_KEY and ANTHROPIC_API_KEY or OPENAI_API_KEY + model ids
-scripts/run.sh                  # API + dashboard on http://127.0.0.1:8000
-scripts/test.sh                 # backend pytest + frontend typecheck/vitest
-scripts/demo.sh all             # the three hackathon demos in the terminal
+scripts/setup.sh        # venvs, demo projects (pydantic 2.9.2, zod 3.23.8), TypeScript checker, frontend build, .env
+$EDITOR .env            # TAVILY_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY, VERICODE_CODER_MODEL (+ optional VERICODE_PLANNER_MODEL)
+scripts/run.sh          # http://127.0.0.1:8000 — open the login URL it prints (token also in .vericode_token)
+scripts/test.sh         # backend + frontend tests
+scripts/demo.sh all     # Demo 1 (Python), 1b (TypeScript), 2 (stale answers), 3 (benchmark)
 ```
 
-Frontend development with hot reload: `cd frontend && npm run dev` (port 5173, proxies `/api` to :8000).
+If the Docker daemon is running, test commands execute in a container. Otherwise they run in the labelled
+process sandbox (`VERICODE_SANDBOX=auto|docker|process`).
 
-### What runs without credentials
+## Status — what is implemented, tested, live-tested, mocked
 
-| Capability | No keys | `TAVILY_API_KEY` | LLM key + `VERICODE_CODER_MODEL` |
-|---|---|---|---|
-| Repository inspection, dependency truth, API verification (deterministic) | ✅ | ✅ | ✅ |
-| Stale-answer detection | offline **fixture** mode, or live mode reporting `UNVERIFIED (missing_key)` | ✅ live | ✅ |
-| Live documentation evidence for API findings | reported as "not performed" | ✅ | ✅ |
-| Coding agent / benchmark | **scripted mock provider**: only the 2 bundled demo tasks, token counts *estimated* | same | ✅ real generation, provider-reported tokens |
+| Capability | Status |
+|---|---|
+| Repository inspection (manifests, lockfiles, installed versions, conventions, relevant files, cache invalidation) | Implemented and tested |
+| Python API verification (static AST: re-exports, `_dynamic_imports`, inherited methods, `@deprecated`, `warnings.warn`, removed kwargs, migration messages) | Implemented and tested against real pydantic 2.9.2 |
+| TypeScript verification via the compiler API (module resolution, exports, members, signatures, generics, `@deprecated`, call type-check) | Implemented and tested against real zod 3.23.8 |
+| Claim extraction: compound splitting with spans, negation, conditionals, opinions, date ranges | Implemented and tested (deterministic). LLM extraction implemented; mocked-HTTP tests only |
+| Semantic verification: lexical + negation | Implemented and tested |
+| LLM evidence judge (quotes must appear verbatim in the source) | Implemented; mocked-HTTP tests only, **not live-tested** |
+| Tavily search + extract (aligned with the current OpenAPI spec: `include_published_date`, `include_usage`, `include_domains_mode`, 432/433 quota codes) | Implemented; mocked-HTTP tests. **Not live-tested**: no key, and `api.tavily.com` is blocked by this build environment's egress proxy |
+| Anthropic + OpenAI providers, structured outputs, retries, timeouts, provider-reported usage | Implemented; mocked-HTTP tests. **Not live-tested** (no key) |
+| Coding agent on arbitrary tasks (real provider) | Implemented. Only the scripted mock has been run here (3 bundled tasks) |
+| Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes run inside the container) |
+| Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
+| Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
+| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes | Implemented and tested. **All recorded numbers are MOCK** |
 
-The mock provider is labelled everywhere it appears (sidebar, dashboard, task reports, benchmark
-`measurement` field). It does not reason. It returns canned code that behaves the way a model with
-Pydantic-v1 knowledge would: it writes v1-style APIs unless the prompt contains the corrected API, which
-can come from a VeriCode briefing or from a test-failure message. Any other task fails explicitly with
-`MOCK_PROVIDER_NO_SCRIPT`.
+## Measured results (honest)
 
-## The three demos
+Real-provider numbers: **none yet** (no LLM key available while this was built). The only benchmark that has run
+used the **scripted mock provider (MOCK, chars/4)**. It demonstrates the mechanics, not real-model efficiency:
 
-See [docs/DEMO.md](docs/DEMO.md). In short:
+| Task | Baseline | VeriCode | Savings | First pass (B/V) | Final success (B/V) |
+|---|---|---|---|---|---|
+| Demo 1 users (pydantic v1 APIs planned) | 11,779 | 1,421 | 87.9% | 0% / 100% | 100% / 100% |
+| Demo 3 priority_summary (no API risk) | 2,495 | 1,466 | 41.2% | 100% / 100% | 100% / 100% |
+| Demo 1b zod signup (TS, 3-file repo) | 1,231 | 1,415 | **−14.9%** | 0% / 100% | 100% / 100% |
 
-- **Demo 1 – Pre-flight API detection.** `demos/sample_project` declares `pydantic>=1.10` but has
-  pydantic **2.9.2** installed. The planner proposes `Field(regex=…)`, `@validator` and `.dict()`.
-  VeriCode finds the problems in the installed source:
-  - `Field(regex=)` → **INCOMPATIBLE** (`fields.py:685` raises "`regex` is removed. use `pattern`").
-  - `validator` → **DEPRECATED** (decorated `@deprecated`, points to `field_validator`).
-  - `BaseModel.dict` → **DEPRECATED** (points to `model_dump`).
+The negative row is kept on purpose. On a tiny repository the planner overhead (607 tokens) costs more than the
+context it saves. In that run the baseline also shipped the deprecated `nonempty()` call, which tests don't catch.
+With real credentials, run `scripts/demo.sh 3 --runs 3` to get `ACTUAL_PROVIDER_USAGE` results. The dashboard keeps
+mock and real benchmarks apart.
 
-  The briefing goes to the coder, and the acceptance tests (deprecations treated as errors) pass on the
-  first attempt.
-- **Demo 2 – Stale-answer detection.** A 4-claim answer gives one contradicted claim (Python 3.12 is
-  "latest"), one supported claim (3.14 introduced t-strings), one unverified claim and one stable fact. You
-  get evidence links, freshness, confidence and a cited corrected answer. Fixture mode is offline and
-  labelled; `--live` uses Tavily.
-- **Demo 3 – Baseline vs VeriCode.** Same tasks, provider, repository copy, tests and repair budget.
-  Savings are counted only when both modes succeed.
+## Required environment variables
 
-## Results we actually measured (this environment)
+| Variable | Needed for |
+|---|---|
+| `TAVILY_API_KEY` | live evidence (Track 1, API docs fallback) |
+| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (+ `OPENAI_BASE_URL` for compatible gateways) | real planner, coder, judge |
+| `VERICODE_CODER_MODEL` (and optionally `VERICODE_PLANNER_MODEL`) | model ids, never hardcoded |
+| `VERICODE_LLM_PROVIDER=mock` | explicit offline demo mode (chosen automatically when no key is set and `VERICODE_DEMO_MODE=1`) |
+| `VERICODE_SANDBOX`, `VERICODE_SANDBOX_MEMORY`, `VERICODE_SANDBOX_CPUS` | execution isolation |
+| `VERICODE_AUTH_TOKEN` (optional fixed token), `VERICODE_HOST`, `VERICODE_ALLOW_REMOTE` | access control |
 
-No LLM or Tavily key was available while this was built, so the numbers below come from the **scripted mock
-provider with estimated tokens (chars/4)**. They show that the pipeline works and how large the context
-difference is. They are **not** evidence of real-model savings. With a real key, run
-`scripts/demo.sh 3 --runs 3` to get provider-reported numbers.
-
-| Task | Baseline tokens | VeriCode tokens | Savings | First-pass (B/V) | Final success (B/V) | Repairs (B/V) |
-|---|---|---|---|---|---|---|
-| Demo 1 users (incompatible API) | 11,779 | 1,302 | 88.9% | 0% / 100% | 100% / 100% | 3 / 0 |
-| Demo 3 priority_summary (no API risk) | 2,495 | 1,346 | 46.1% | 100% / 100% | 100% / 100% | 0 / 0 |
-
-n = 3 runs per mode, sd = 0. Mock outputs are deterministic, so the spread will only appear with real models.
-Detection on Demo 1: 3/3 problematic APIs flagged and 0/1 false positives (BaseModel is reported `STALE`
-because it exists but the plan assumed v1; that is not counted as a problem).
+A configured real provider that fails returns an error. It never falls back to mock.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md): modules, data flow, scoring formulas
-- [API reference](docs/API.md): every implemented endpoint
-- [Security](docs/SECURITY.md): what is and isn't isolated
-- [Benchmark methodology](docs/BENCHMARK.md)
-- [Demo guide](docs/DEMO.md)
-- [Setup, running and testing](docs/SETUP.md)
+[Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Security](docs/SECURITY.md) ·
+[Benchmark method](docs/BENCHMARK.md) · [Demo guide](docs/DEMO.md) · [Setup & testing](docs/SETUP.md) · [Changelog](CHANGELOG.md)
 
 ## Known limitations
 
-- **No real-model benchmark yet.** Real token savings and success rates have not been measured; that needs credentials.
-- **Live Tavily calls have not been made from this environment** (no key). The client follows the documented REST
-  contract (`POST https://api.tavily.com/search` and `/extract`, Bearer auth) and is tested against mocked
-  transports covering success, missing key, timeout, 429, invalid schema and no results.
-- **Claim verification is deterministic and value-based.** It compares versions, prices, names, percentages
-  and years. Claims with no concrete value (e.g. "X supports streaming") end up `UNVERIFIED` rather than
-  being guessed. Sentence-level claim splitting is heuristic.
-- **Source authority comes from domain heuristics** (government, docs/org, registry, news, community).
-  A company's own `.com` site counts as general web unless it is listed in *preferred domains*.
-- **JS/TS checks read export maps and `.d.ts` files.** Argument checks for TS are name-based and therefore
-  weak. The TS-compiler check only runs when the project has `typescript` installed.
-- **Python checks are static** (decorators `@deprecated`, top-level `warnings.warn`, `kwargs.pop(...)`+`raise`
-  rejection patterns, re-exports including `_dynamic_imports`, base classes in the same package). Behaviour
-  that only shows up at runtime may be missed; findings are then reported as `VERIFIED_LOCAL` with medium
-  confidence, or `UNCERTAIN`.
-- **The sandbox is process-level, not a container**: rlimits, scrubbed env, allowlisted argv, timeout, no network
-  via `unshare -rn` when the kernel allows it (it did here). Tests run on the host filesystem inside a copy of
-  the workspace. See SECURITY.md.
-- **Settings edited in the UI are runtime-only.** Persist them in `.env`.
+- No live Tavily or LLM run has been performed (credentials unavailable, and Tavily/OpenAI hosts are blocked by the
+  build sandbox). Live tests exist: `VERICODE_LIVE_TESTS=1 scripts/test.sh -m live`.
+- The deterministic claim splitter handles common English structures. Complex rhetoric needs the optional LLM
+  extraction, which requires a real provider. Lexical support is weaker than value or judge evidence and is penalised in confidence.
+- Source authority comes from configurable rules plus heuristics: domain classes, and the claim's entity matching
+  the domain. It cannot by itself prove that a page is official.
+- The Docker sandbox mounts the host `/usr` read-only to avoid image pulls. Interpreters must live under `/usr`
+  (or `node` under its own prefix, which is mounted read-only automatically).
+- Single-user local tool: one access token, no user accounts or roles.
+- Mock coding supports only the 3 bundled tasks. Real-provider mode accepts any task.

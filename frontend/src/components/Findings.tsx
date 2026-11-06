@@ -49,6 +49,20 @@ export function FindingsList({ findings }: { findings: any[] }) {
               ))}
             </div>
           )}
+          {f.local?.signatures?.length > 0 && (
+            <div className="mt-3">
+              <div className="mb-1 text-xs font-medium text-slate-400">Installed signature(s) — TypeScript compiler API {f.local.package ? `(${f.local.package.name}@${f.local.package.version})` : ''}</div>
+              {f.local.signatures.map((sg: any, k: number) => (
+                <div key={k} className="mb-1 font-mono text-xs text-slate-300">{sg.text} <span className="text-slate-500">· args {sg.min_args}–{sg.max_args ?? '∞'}{sg.type_params?.length ? ` · generics ${sg.type_params.map((t: any) => t.name + (t.constraint ? ' extends ' + t.constraint : '')).join(', ')}` : ''}</span></div>
+              ))}
+            </div>
+          )}
+          {f.local?.call_check && (
+            <div className="mt-2 text-xs"><span className="text-slate-400">Type-checked call: </span><span className="font-mono text-slate-200">{f.local.call_check.source}</span> <Badge tone={f.local.call_check.ok ? 'green' : 'red'}>{f.local.call_check.ok ? 'ok' : 'type error'}</Badge>
+              {f.local.call_check.diagnostics?.map((d: any, k: number) => <div key={k} className="mt-1 font-mono text-rose-300">TS{d.code}: {d.message}</div>)}
+            </div>
+          )}
+          {f.local?.similar_exports?.length > 0 && <div className="mt-2 text-xs text-slate-400">Similar exports: <span className="font-mono">{f.local.similar_exports.join(', ')}</span></div>}
           {f.local?.doc && <Mono className="mt-3">{f.local.doc}</Mono>}
         </Expand>
       ))}

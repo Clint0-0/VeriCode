@@ -23,27 +23,33 @@ export function TokenTable({ tokens }: { tokens: any }) {
 
 export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => void }) {
   const [applyErr, setApplyErr] = useState<unknown>(null)
+  const [conflicts, setConflicts] = useState<any[] | null>(null)
   const [applied, setApplied] = useState<string[] | null>(null)
   const res = task.result ?? {}
   const pf = task.preflight ?? {}
   const running = String(task.status).startsWith('running') || task.status === 'queued'
   const apply = async () => {
-    setApplyErr(null)
+    setApplyErr(null); setConflicts(null)
     try {
       const r = await api<any>(`/tasks/${task.id}/apply`, { method: 'POST' })
       setApplied(r.applied)
       onApplied?.()
-    } catch (e) { setApplyErr(e) }
+    } catch (e: any) {
+      setApplyErr(e)
+      if (e?.data?.conflicts) setConflicts(e.data.conflicts)
+    }
   }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Badge>{task.status}</Badge><Badge tone="blue">{task.mode}</Badge>
+        <Badge>{task.outcome ?? res.outcome ?? task.status}</Badge><Badge tone="blue">{task.mode}</Badge>
+        {res.backend && <span className="text-xs text-slate-500">sandbox: {res.backend}</span>}
         <span className="font-mono text-xs text-slate-500">{task.id}</span>
         <span className="text-xs text-slate-500">provider: {task.provider}</span>
         {res.duration_s != null && <span className="text-xs text-slate-500">{res.duration_s}s</span>}
       </div>
-      {task.provider === 'mock' && <Notice>Scripted mock provider: responses are canned for demo tasks and token counts are estimated.</Notice>}
+      {task.provider === 'mock' && <Notice>Scripted mock provider: responses are canned for demo tasks and token counts are estimated (MOCK).</Notice>}
+      {res.outcome === 'partial' && <Notice>Partial: code was changed but the project has no tests, so the change is unvalidated. It is not counted as a success.</Notice>}
       {res.error && <ErrorBox error={{ message: res.error }} />}
       <Card title="Progress">
         <ol className="space-y-1 text-sm">
@@ -80,7 +86,7 @@ export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => v
           </table>
           {res.checks?.results?.map((r: any, i: number) => (
             <div key={i} className="mt-3">
-              <div className="text-xs text-slate-400"><span className="font-mono">{r.command}</span> → exit {r.returncode} · isolation: {r.isolation}</div>
+              <div className="text-xs text-slate-400"><Badge tone={r.passed ? 'green' : r.required === false ? 'amber' : 'red'}>{r.kind ?? 'test'}{r.required === false && !r.passed ? ' (pre-existing, advisory)' : ''}</Badge> <span className="font-mono">{r.command}</span> → exit {r.returncode} · isolation: {r.isolation}</div>
               <Mono className="mt-1 max-h-64">{(r.stdout || '') + (r.stderr ? `\n${r.stderr}` : '')}</Mono>
             </div>
           ))}
@@ -92,6 +98,12 @@ export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => v
         }>
           <p className="mb-2 text-xs text-slate-500">Changes were made and validated in an isolated copy ({res.sandbox}). Applying copies them into the real workspace; it is refused if those files changed since the run.</p>
           <ErrorBox error={applyErr} />
+          {conflicts && conflicts.map((c) => (
+            <div key={c.path} className="mt-2">
+              <div className="text-xs text-amber-300">Conflict: <span className="font-mono">{c.path}</span> was {c.state} in your workspace after the run started. Nothing was overwritten — re-run the task or merge manually. Your change:</div>
+              <Diff text={c.user_diff} />
+            </div>
+          ))}
           <Diff text={res.diff} />
         </Card>
       )}

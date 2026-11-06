@@ -21,9 +21,9 @@ frontend/ (React 19 + TS + Tailwind v4, Vite)  ──REST──►  backend/veri
 |---|---|---|
 | A Repository Intelligence | `repo_intel.py` | requirements/pyproject/poetry.lock/uv.lock/package.json/package-lock/pnpm/yarn; installed versions from `.venv/**/site-packages/*.dist-info/METADATA` and `node_modules/*/package.json` (metadata only, nothing imported). Fingerprint = hash of manifests + sources + installed dist names → env cache keyed by fingerprint (auto-invalidates). Relevant-file scoring: path/symbol/import term overlap with IDF filtering + exact identifiers; reasons returned. |
 | B Speculative API Skeleton | `skeleton.py` | Planner prompt asks for JSON only; validated by Pydantic schema; up to 3 attempts with the validation error fed back. |
-| C Local Dependency Truth | `pyinspect.py`, `jsinspect.py`, `verify_api.py` | Python: AST over installed source, follows `from x import`, star imports, `_dynamic_imports` maps, base classes; detects `@deprecated`, top-level `warnings.warn(DeprecationWarning)`, and `kwargs.pop('x')` + `raise` (removed kwargs); package-provided migration messages for missing names. Optional runtime introspection in an isolated subprocess (`python -I`, timeout, scrubbed env) only when static resolution fails. JS: `exports`/`types`, `export * from`, `export {a as b} from`, `@deprecated` JSDoc, members of classes/interfaces; TS compiler API check when project has `typescript`. |
+| C Local Dependency Truth | `pyinspect.py`, `jsinspect.py`, `verify_api.py` | Python: AST over installed source, follows `from x import`, star imports, `_dynamic_imports` maps, base classes; detects `@deprecated`, top-level `warnings.warn(DeprecationWarning)`, and `kwargs.pop('x')` + `raise` (removed kwargs); package-provided migration messages for missing names. Optional runtime introspection in an isolated subprocess (`python -I`, timeout, scrubbed env) only when static resolution fails. JS/TS: **TypeScript compiler API** (`tools/ts-checker/check.cjs`, pinned TS 5.9.3) resolves the module from the project's node_modules (export maps, `types`). It checks named and default exports, class/interface/namespace members, signatures (required/optional/rest, generic constraints) and `@deprecated`, and type-checks the planned call (`args` = TS expressions). The regex `.d.ts` reader is the fallback when the checker is not installed. |
 | D Tavily | `tavily.py` | `POST /search` (+ `/extract` for full page text of top results). Missing key, timeout, network, 429 (Retry-After), 5xx, invalid schema, no results → explicit `SearchOutcome.status`; bounded retries; SQLite cache with TTL. |
-| E Stale-answer detection | `claims.py`, `stale.py` | See formulas below. |
+| E Stale-answer detection | `claims.py`, `stale.py` | Span-traceable extraction (compound splitting, negation, conditionals, opinions, ranges; optional LLM extraction). Verification: value check → lexical/negation check → optional quote-validated LLM judge. Configurable authority rules. See formulas below. |
 | F Risk engine | `verify_api.py` | Statuses VERIFIED_LOCAL, VERIFIED_LIVE, STALE, INCOMPATIBLE, DEPRECATED, NOT_FOUND, UNCERTAIN, NOT_CHECKED. Separate fields: `api_compatibility`, `evidence_freshness`, `verification_confidence`, `risk_score`. |
 | G Surgical context | `agent.build_briefing`, `select_relevant_files` | Briefing lists only problems + one line of verified APIs; coder receives relevant files only; repair rounds receive failure digest + changed files only. |
 | H Coding agent | `agent.py` | SEARCH/REPLACE edit protocol; exact-single-match application; refuses blind overwrites; runs in `demos/_runs/<task>` copy; tests via allowlisted commands; bounded repairs; unified diff; `apply` endpoint with hash-based overwrite protection. |
@@ -44,18 +44,29 @@ software_version 90, api_documentation 180, pricing 60, leadership 365, law_regu
 release_date 365, deadline 30, current_events 14, other_volatile 180.
 
 **Verification confidence** (0–100 evidence-strength index, *not calibrated*) over decisive sources =
-`35·max authority + 25·mean relevance + 15·specificity + 15·corroboration(distinct domains, max 3) + 10·date known − 30·conflict`.
+`30·max authority + 20·mean relevance + 15·completeness (claim-term coverage) + 10·specificity (value-based=1, else 0.5)
++ 15·corroboration (distinct domains, max 3) + 10·date known − 30·conflict − 10·(decided only lexically or by the LLM judge)`.
+
+**Authority** (in order): preferred domains 0.95 → category primary sources from Settings 0.95 → government 1.0 →
+community/blog 0.35 → the claim's own entity site (domain label matches a claim term) 0.9 → registries 0.8 →
+docs subdomains 0.8 → encyclopedia 0.6 (secondary) → news 0.7 (secondary) → org/project sites 0.7 → general web 0.5.
+Authority is applied only to sources whose content passed the relevance gate.
 
 **Claim status rules**
 - Relevance: a source counts only if ≥34 % of the claim's subject terms appear in the best-matching excerpt.
-- *support*: the claim's concrete value appears (version, money, person, percent, year). For "latest/current"
+- *support (value)*: the claim's concrete value appears in a statement covering ≥50% of the claim's terms (version, money, person, percent, year). For "latest/current"
   version claims, the source's highest version must equal the claimed one.
 - *contradict*: a same-type value differs (e.g. a newer version than the claimed latest, a different price in the same currency).
 - Support + contradiction → `CONTRADICTED` if every contradicting source is dated later than every supporting one
   and is not community-grade; otherwise `CONFLICTING_EVIDENCE`.
 - Only support → `CURRENT_SUPPORTED`, or `POTENTIALLY_STALE` if the claim asserts a present state and the best
   supporting evidence has freshness < 25. Past-event claims ("introduced in", "was released") do not go stale.
-- No support or contradiction → `UNVERIFIED` (with the reason, e.g. search unavailable).
+- *support (lexical)*: ≥75% normalised term coverage with the same polarity. *contradict (lexical)*: the same
+  coverage with opposite polarity (negation).
+- *LLM judge* (real provider, optional, only when nothing was decided by value): structured verdict. Its quotes must
+  appear verbatim in the cited excerpt, otherwise the verdict is discarded.
+- No support or contradiction → `UNVERIFIED`, with `missing_evidence` (e.g. search unavailable, related sources that
+  don't state the claim). Absence of support never becomes `CONTRADICTED`.
 - Stable statements → `NOT_APPLICABLE`.
 
 **Corrected answer**: only `CONTRADICTED` claims with a value extracted from evidence are rewritten, each with a
