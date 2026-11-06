@@ -145,11 +145,82 @@ def network_isolation_available() -> bool:
     return _NET_ISOLATION
 
 
-def run_command(argv: list[str], cwd: Path, timeout: int | None = None) -> CommandResult:
-    """Run an allowlisted command without a shell, with scrubbed env, rlimits, timeout and
-    (when the kernel allows) no network. This is process-level isolation, not a container."""
+SANDBOX_IMAGE = "vericode-sandbox:base"
+_DOCKER_OK: bool | None = None
+
+
+def docker_available() -> bool:
+    """Docker CLI present and daemon reachable (cached)."""
+    global _DOCKER_OK
+    if _DOCKER_OK is None:
+        exe = shutil.which("docker")
+        ok = False
+        if exe:
+            try:
+                ok = subprocess.run([exe, "info", "--format", "{{.ServerVersion}}"], capture_output=True, timeout=10).returncode == 0
+            except Exception:
+                ok = False
+        _DOCKER_OK = ok
+    return _DOCKER_OK
+
+
+def ensure_sandbox_image() -> None:
+    """Create a tiny local base image (no registry pull): empty usr-merged rootfs; host /usr is mounted read-only."""
+    if subprocess.run(["docker", "image", "inspect", SANDBOX_IMAGE], capture_output=True).returncode == 0:
+        return
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for d in ("work", "tmp", "proc", "dev", "etc", "usr", "home"):
+            ti = tarfile.TarInfo(d)
+            ti.type, ti.mode = tarfile.DIRTYPE, 0o755 if d != "tmp" else 0o1777
+            tar.addfile(ti)
+        for link, target in (("bin", "usr/bin"), ("lib", "usr/lib"), ("lib64", "usr/lib64"), ("sbin", "usr/sbin")):
+            ti = tarfile.TarInfo(link)
+            ti.type, ti.linkname = tarfile.SYMTYPE, target
+            tar.addfile(ti)
+        data = b"nobody:x:65534:65534:nobody:/tmp:/usr/sbin/nologin\n"
+        ti = tarfile.TarInfo("etc/passwd")
+        ti.size = len(data)
+        tar.addfile(ti, io.BytesIO(data))
+    p = subprocess.run(["docker", "import", "-", SANDBOX_IMAGE], input=buf.getvalue(), capture_output=True, timeout=60)
+    if p.returncode != 0:
+        raise SecurityError(f"could not create sandbox image: {p.stderr.decode()[:300]}")
+
+
+def sandbox_backend() -> str:
+    """Resolve the configured backend. An explicit 'docker' request never silently downgrades."""
+    want = settings.sandbox_backend
+    if want == "process":
+        return "process"
+    if docker_available():
+        try:
+            ensure_sandbox_image()
+            return "docker"
+        except SecurityError:
+            if want == "docker":
+                raise
+            return "process"
+    if want == "docker":
+        raise SecurityError("sandbox_backend=docker but the Docker daemon is not reachable")
+    return "process"
+
+
+def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend: str | None = None,
+                ro_mounts: dict[str, Path] | None = None) -> CommandResult:
+    """Run an allowlisted command (no shell) in the selected sandbox.
+
+    docker : container with --network none, read-only rootfs, host /usr read-only, only the workspace copy
+             writable (/work), dependency dirs read-only, non-root uid 65534, all capabilities dropped,
+             no-new-privileges, memory/CPU/pids limits, tmpfs /tmp, timeout + forced kill.
+    process: scrubbed env, rlimits, new session, timeout, and no network via `unshare -rn` when available.
+    """
     _check_allowed(argv)
     timeout = timeout or settings.command_timeout
+    backend = backend or sandbox_backend()
+    if backend == "docker":
+        return _run_docker(argv, cwd, timeout, ro_mounts or {})
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(cwd),
@@ -164,10 +235,12 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None) -> Comma
         if Path(argv[0]).name in ("python", "pytest"):
             argv = [str(venv / Path(argv[0]).name)] + argv[1:]
     full = argv
-    isolation = "rlimits+scrubbed-env"
+    isolation = "process: rlimits+scrubbed-env+timeout"
     if network_isolation_available():
         full = [shutil.which("unshare") or "unshare", "-rn"] + argv
-        isolation += "+no-network(unshare)"
+        isolation += "+no-network(unshare -rn)"
+    else:
+        isolation += " (network NOT restricted)"
     try:
         p = subprocess.run(full, cwd=str(cwd), env=env, capture_output=True, text=True,
                            timeout=timeout, preexec_fn=_limits)
@@ -175,6 +248,43 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None) -> Comma
     except subprocess.TimeoutExpired as e:
         out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s", True, isolation)
+
+
+def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, Path]) -> CommandResult:
+    import uuid
+    name = f"vc-{uuid.uuid4().hex[:10]}"
+    for root, dirs, files in os.walk(cwd):  # let uid 65534 write into the disposable copy only
+        for d in dirs:
+            p = Path(root) / d
+            if not p.is_symlink():
+                p.chmod(0o777)
+        for f in files:
+            p = Path(root) / f
+            if not p.is_symlink():
+                p.chmod(p.stat().st_mode | 0o666)
+    cwd.chmod(0o777)
+    cmd = ["docker", "run", "--rm", "--name", name, "--network", "none",
+           "--memory", settings.sandbox_memory, "--memory-swap", settings.sandbox_memory, "--cpus", settings.sandbox_cpus,
+           "--pids-limit", "256", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+           "--user", "65534:65534", "--tmpfs", "/tmp:size=128m,mode=1777",
+           "-v", "/usr:/usr:ro", "-v", f"{cwd}:/work:rw"]
+    for rel, host in ro_mounts.items():
+        if host.exists():
+            cmd += ["-v", f"{host.resolve()}:/work/{rel}:ro"]
+    cmd += ["-w", "/work", "-e", "HOME=/tmp", "-e", "CI=1", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "LANG=C.UTF-8",
+            "-e", "PATH=/work/.venv/bin:/work/node_modules/.bin:/usr/local/bin:/usr/bin:/bin", SANDBOX_IMAGE]
+    inner = list(argv)
+    if Path(inner[0]).name in ("python", "pytest") and ".venv" in ro_mounts:
+        inner[0] = f"/work/.venv/bin/{Path(inner[0]).name}"
+    isolation = (f"docker: --network none, read-only rootfs, uid 65534, cap-drop ALL, memory {settings.sandbox_memory}, "
+                 f"cpus {settings.sandbox_cpus}, pids 256, only workspace copy writable")
+    try:
+        p = subprocess.run(cmd + inner, capture_output=True, text=True, timeout=timeout)
+        return CommandResult(argv, p.returncode, redact(p.stdout[-20000:]), redact(p.stderr[-20000:]), False, isolation)
+    except subprocess.TimeoutExpired as e:
+        subprocess.run(["docker", "kill", name], capture_output=True)
+        out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
+        return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s (container killed)", True, isolation)
 
 
 # --- SSRF guard --------------------------------------------------------------

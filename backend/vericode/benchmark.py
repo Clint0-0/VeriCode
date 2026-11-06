@@ -66,6 +66,7 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
                 "runs": len(rs), "success_rate": sum(bool(r.get("success")) for r in rs) / len(rs),
                 "first_pass_rate": sum(bool(r.get("first_pass_success")) for r in rs) / len(rs),
                 "total_tokens": _stats([r["tokens"]["total"] for r in rs]),
+                "verification_overhead_tokens": _stats([sum(v["input"] + v["output"] for k, v in r["tokens"]["by_stage"].items() if k in ("planner", "claim_judge", "claim_extraction")) for r in rs]),
                 "input_tokens": _stats([r["tokens"]["input"] for r in rs]),
                 "output_tokens": _stats([r["tokens"]["output"] for r in rs]),
                 "llm_calls": _stats([r["tokens"]["calls"] for r in rs]),
@@ -76,22 +77,32 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
                 "task_ids": [r["task_id"] for r in rs], "errors": [r.get("error") for r in rs if r.get("error")],
             }
         both_ok = all(r.get("success") for r in modes["baseline"] + modes["vericode"])
+        paired = [round((b["tokens"]["total"] - v["tokens"]["total"]) / b["tokens"]["total"] * 100, 1)
+                  for b, v in zip(modes["baseline"], modes["vericode"]) if b.get("success") and v.get("success") and b["tokens"]["total"]]
         b, v = summary["baseline"]["total_tokens"]["mean"], summary["vericode"]["total_tokens"]["mean"]
         savings = round((b - v) / b * 100, 1) if both_ok and b else None
         flagged = det["tp"] + det["fp"]
         per_task.append({
             "task": t["id"], "title": t["title"], "summary": summary, "token_savings_pct": savings,
-            "savings_valid": both_ok,
+            "savings_valid": both_ok, "paired_run_savings_pct": paired,
             "savings_note": None if both_ok else "Not computed: at least one run failed; comparing failed and successful runs would be unfair.",
             "detection": {**det, "detection_rate": round(det["tp"] / (det["tp"] + det["fn"]), 2) if det["tp"] + det["fn"] else None,
                           "false_positive_rate": round(det["fp"] / (det["fp"] + det["tn"]), 2) if det["fp"] + det["tn"] else None,
                           "flagged": flagged},
         })
-    result = {"id": bid, "created_at": time.time(), "provider": settings.effective_provider(), "runs_per_mode": runs,
-              "repair_budget": repairs, "tasks": per_task,
-              "measurement": "estimated (mock provider, chars/4)" if settings.effective_provider() == "mock" else "provider-reported usage",
+    labels = {t["summary"][m]["measurement"] for t in per_task for m in ("baseline", "vericode")}
+    measurement = "MOCK" if "MOCK" in labels else "ESTIMATED" if "ESTIMATED" in labels else "ACTUAL_PROVIDER_USAGE"
+    valid = [t["token_savings_pct"] for t in per_task if t["token_savings_pct"] is not None]
+    from .llm import provider_status
+    ps = provider_status()
+    result = {"id": bid, "created_at": time.time(), "provider": ps["provider"], "coder_model": ps["coder_model"],
+              "planner_model": ps["planner_model"], "runs_per_mode": runs, "repair_budget": repairs, "tasks": per_task,
+              "measurement": measurement,
+              "average_savings_pct": round(statistics.mean(valid), 1) if valid else None,
+              "savings_stdev_across_tasks": round(statistics.stdev(valid), 1) if len(valid) > 1 else None,
+              "comparable_tasks": len(valid), "total_tasks": len(per_task),
               "methodology": __doc__}
     with db.tx() as c:
-        c.execute("INSERT INTO benchmarks VALUES(?,?,?,?,?,?)",
-                  (bid, result["created_at"], ",".join(t["id"] for t in catalog), "demos", runs, db.dumps(result)))
+        c.execute("INSERT INTO benchmarks(id,created_at,task_prompt,project_path,runs,result_json,measurement) VALUES(?,?,?,?,?,?,?)",
+                  (bid, result["created_at"], ",".join(t["id"] for t in catalog), "demos", runs, db.dumps(result), measurement))
     return result

@@ -1,18 +1,20 @@
 """FastAPI application - REST API contracts for every VeriCode module."""
 from __future__ import annotations
 
+import os
 import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, benchmark, db, llm, memory, stale
+from . import agent, auth, benchmark, db, llm, memory, stale
 from .config import ROOT, settings
 from .repo_intel import inspect_project, select_relevant_files
 from .security import SecurityError, network_isolation_available, resolve_workspace
@@ -21,18 +23,67 @@ from .tavily import TavilyClient
 from .verify_api import verify_planned_api, verify_skeleton
 
 MAX_BODY = 256_000
-app = FastAPI(title="VeriCode API", version="1.0.0", description="Verify Before You Generate")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    print(f"\n  VeriCode login URL: {auth.login_url(int(os.environ.get('PORT', '8000')))}\n"
+          f"  (token also stored in {auth.token_file()})\n", flush=True)
+    yield
+
+
+app = FastAPI(title="VeriCode API", version="2.0.0", description="Verify Before You Generate", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-                   allow_methods=["*"], allow_headers=["*"])
+                   allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
 db.init_db()
+settings.load_persisted()
+if not auth.is_loopback_bind(settings.host) and not settings.allow_remote:
+    raise RuntimeError(f"Refusing to serve on non-loopback host {settings.host!r} without VERICODE_ALLOW_REMOTE=1")
 
 
 @app.middleware("http")
-async def limit_body(request: Request, call_next):
+async def guard(request: Request, call_next):
     cl = request.headers.get("content-length")
-    if cl and int(cl) > MAX_BODY:
+    if cl and cl.isdigit() and int(cl) > MAX_BODY:
         return JSONResponse({"detail": "request too large"}, status_code=413)
-    return await call_next(request)
+    if not auth.host_allowed(request.headers.get("host")):
+        return JSONResponse({"detail": "host not allowed (set VERICODE_ALLOW_REMOTE=1 to expose)"}, status_code=403)
+    ok, status, reason = auth.authorize(request.url.path, request.method, dict(request.cookies), dict(request.headers))
+    if not ok:
+        return JSONResponse({"detail": reason, "code": "auth"}, status_code=status)
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    return resp
+
+
+class LoginReq(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/auth/login")
+def login(req: LoginReq, response: Response):
+    if not auth.check_token(req.token):
+        raise HTTPException(401, "invalid access token")
+    sid, csrf = auth.create_session()
+    response.set_cookie(auth.SESSION_COOKIE, sid, httponly=True, samesite="strict", max_age=auth.SESSION_TTL, path="/")
+    response.set_cookie(auth.CSRF_COOKIE, csrf, httponly=False, samesite="strict", max_age=auth.SESSION_TTL, path="/")
+    return {"authenticated": True, "csrf": csrf}
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    csrf = auth.session_csrf(request.cookies.get(auth.SESSION_COOKIE))
+    return {"authenticated": csrf is not None, "csrf": csrf}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response):
+    auth.delete_session(request.cookies.get(auth.SESSION_COOKIE))
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    response.delete_cookie(auth.CSRF_COOKIE, path="/")
+    return {"authenticated": False}
 
 
 @app.exception_handler(SecurityError)

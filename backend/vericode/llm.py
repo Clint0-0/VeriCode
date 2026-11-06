@@ -1,19 +1,31 @@
 """Configurable LLM provider abstraction with token accounting.
 
-Providers: anthropic (Messages API), openai (OpenAI-compatible chat completions), mock (scripted,
-deterministic, DEMO ONLY - token counts are estimates, chars/4). No model ids are hardcoded:
-they come from settings/env.
+Providers
+  anthropic : Messages API  POST {base}/v1/messages  (x-api-key, anthropic-version: 2023-06-01)
+              usage.input_tokens / output_tokens (+ cache_read_input_tokens / cache_creation_input_tokens)
+  openai    : Chat Completions  POST {base}/chat/completions  (Authorization: Bearer)
+              usage.prompt_tokens / completion_tokens. `max_completion_tokens` is sent to api.openai.com
+              (current parameter); OpenAI-compatible gateways receive `max_tokens`.
+  mock      : scripted, deterministic, DEMO ONLY - counts are estimates and labelled MOCK.
+
+Measurement labels per call: ACTUAL_PROVIDER_USAGE | ESTIMATED (real provider, no usage returned) | MOCK.
+Model ids are never hardcoded. A failing real provider raises LLMUnavailable - it never falls back to mock.
 """
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
+from typing import TypeVar
 
 import httpx
+from pydantic import BaseModel, ValidationError
 
 from . import db
 from .config import settings
 from .security import redact
+
+ACTUAL, ESTIMATED, MOCK = "ACTUAL_PROVIDER_USAGE", "ESTIMATED", "MOCK"
 
 
 class LLMUnavailable(Exception):
@@ -30,6 +42,23 @@ class LLMResult:
     model: str
     stage: str
 
+    @property
+    def measurement(self) -> str:
+        if self.provider == "mock":
+            return MOCK
+        return ESTIMATED if self.estimated else ACTUAL
+
+
+def measurement_of(ledger: list[LLMResult]) -> str:
+    kinds = {r.measurement for r in ledger}
+    if not kinds:
+        return "NO_LLM_CALLS"
+    if MOCK in kinds:
+        return MOCK
+    if ESTIMATED in kinds:
+        return ESTIMATED
+    return ACTUAL
+
 
 def estimate_tokens(text: str) -> int:
     """Rough estimate (~4 chars/token). Always labelled as estimated."""
@@ -39,23 +68,45 @@ def estimate_tokens(text: str) -> int:
 def record_usage(task_id: str | None, r: LLMResult, cached: bool = False) -> None:
     with db.tx() as c:
         c.execute(
-            "INSERT INTO token_usage(task_id,stage,provider,model,input_tokens,output_tokens,estimated,cached,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-            (task_id, r.stage, r.provider, r.model, r.input_tokens, r.output_tokens, int(r.estimated), int(cached), time.time()),
+            "INSERT INTO token_usage(task_id,stage,provider,model,input_tokens,output_tokens,estimated,cached,created_at,measurement) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (task_id, r.stage, r.provider, r.model, r.input_tokens, r.output_tokens, int(r.estimated), int(cached), time.time(), r.measurement),
         )
 
 
-def _model_for(stage: str) -> str:
-    if stage in ("planner", "claim_extraction", "claim_judge"):
+PLANNER_STAGES = ("planner", "claim_extraction", "claim_judge")
+
+
+def model_for(stage: str) -> str:
+    if stage in PLANNER_STAGES:
         return settings.planner_model or settings.coder_model
     return settings.coder_model or settings.planner_model
 
 
+def provider_status() -> dict:
+    p = settings.effective_provider()
+    key = {"anthropic": settings.anthropic_api_key, "openai": settings.openai_api_key}.get(p)
+    ready = p == "mock" or (p in ("anthropic", "openai") and bool(key) and bool(settings.coder_model or settings.planner_model))
+    missing = []
+    if p == "anthropic" and not key:
+        missing.append("ANTHROPIC_API_KEY")
+    if p == "openai" and not key:
+        missing.append("OPENAI_API_KEY")
+    if p in ("anthropic", "openai") and not (settings.coder_model or settings.planner_model):
+        missing.append("VERICODE_CODER_MODEL")
+    if p == "none":
+        missing += ["ANTHROPIC_API_KEY or OPENAI_API_KEY", "VERICODE_CODER_MODEL"]
+    return {"provider": p, "ready": ready, "missing": missing, "real": p in ("anthropic", "openai"),
+            "planner_model": model_for("planner") if p != "mock" else "mock-scripted",
+            "coder_model": model_for("coder") if p != "mock" else "mock-scripted"}
+
+
 def complete(system: str, prompt: str, stage: str, task_id: str | None = None, max_tokens: int = 4000,
-             ledger: list | None = None) -> LLMResult:
+             ledger: list | None = None, transport: httpx.BaseTransport | None = None) -> LLMResult:
     provider = settings.effective_provider()
     system, prompt = redact(system), redact(prompt)  # never send secrets to a model
     if provider == "none":
-        raise LLMUnavailable("No LLM provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY (or enable VERICODE_DEMO_MODE=1 for scripted mock).")
+        raise LLMUnavailable("No LLM provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY plus VERICODE_CODER_MODEL "
+                             "(or VERICODE_LLM_PROVIDER=mock for the scripted offline demo).")
     if provider == "mock":
         from .mock_provider import respond
         text = respond(stage, system, prompt)
@@ -63,62 +114,119 @@ def complete(system: str, prompt: str, stage: str, task_id: str | None = None, m
             raise LLMUnavailable(text)
         r = LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, "mock", "mock-scripted", stage)
     else:
-        model = _model_for(stage)
+        model = model_for(stage)
         if not model:
             raise LLMUnavailable(f"No model configured for stage {stage}: set VERICODE_CODER_MODEL / VERICODE_PLANNER_MODEL")
-        r = _call(provider, model, system, prompt, max_tokens, stage)
+        r = _call(provider, model, system, prompt, max_tokens, stage, transport)
     record_usage(task_id, r)
     if ledger is not None:
         ledger.append(r)
     return r
 
 
-def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str) -> LLMResult:
+T = TypeVar("T", bound=BaseModel)
+
+
+def extract_json_object(text: str) -> dict:
+    text = text.strip()
+    if "```" in text:
+        import re
+        m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
+        if m:
+            text = m.group(1)
+    start = text.find("{")
+    if start < 0:
+        raise ValueError("no JSON object in model output")
+    depth, in_str, esc = 0, False, False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            esc = (ch == "\\") and not esc
+            if ch == '"' and not esc:
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(text[start: i + 1])
+    raise ValueError("unterminated JSON object")
+
+
+def complete_json(system: str, prompt: str, schema: type[T], stage: str, task_id: str | None = None,
+                  ledger: list | None = None, max_attempts: int = 2, max_tokens: int = 1500,
+                  transport: httpx.BaseTransport | None = None) -> T:
+    """Structured output: JSON validated against a Pydantic schema, bounded correction attempts."""
+    hint = json.dumps(schema.model_json_schema())[:3000]
+    sys2 = f"{system}\nRespond with ONE JSON object only, matching this JSON schema:\n{hint}"
+    msg, last = prompt, ""
+    for _ in range(max_attempts):
+        r = complete(sys2, msg, stage, task_id, max_tokens, ledger, transport)
+        try:
+            return schema.model_validate(extract_json_object(r.text))
+        except (ValueError, ValidationError, json.JSONDecodeError) as e:
+            last = str(e)[:500]
+            msg = f"{prompt}\n\nYour previous reply was invalid ({last}). Reply with the corrected JSON object only."
+    raise LLMUnavailable(f"{stage}: model output failed schema validation after {max_attempts} attempts: {last}")
+
+
+def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,
+          transport: httpx.BaseTransport | None = None) -> LLMResult:
     last: Exception | None = None
+    timeout = httpx.Timeout(settings.llm_timeout, connect=15)
     for attempt in range(3):
         try:
-            if provider == "anthropic":
-                if not settings.anthropic_api_key:
-                    raise LLMUnavailable("ANTHROPIC_API_KEY not set")
-                resp = httpx.post(
-                    f"{settings.anthropic_base_url}/v1/messages",
-                    headers={"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01",
-                             "content-type": "application/json"},
-                    json={"model": model, "max_tokens": max_tokens, "system": system,
-                          "messages": [{"role": "user", "content": prompt}]},
-                    timeout=180,
-                )
-                if resp.status_code in (429, 500, 502, 503, 529):
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                resp.raise_for_status()
-                d = resp.json()
-                text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
-                u = d.get("usage") or {}
-                if "input_tokens" in u:
-                    return LLMResult(text, u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0),
-                                     u.get("output_tokens", 0), False, provider, model, stage)
-                return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
-            if provider == "openai":
-                if not settings.openai_api_key:
-                    raise LLMUnavailable("OPENAI_API_KEY not set")
-                resp = httpx.post(
-                    f"{settings.openai_base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                    json={"model": model, "max_tokens": max_tokens,
-                          "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
-                    timeout=180,
-                )
-                if resp.status_code in (429, 500, 502, 503):
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                resp.raise_for_status()
-                d = resp.json()
-                text = d["choices"][0]["message"]["content"] or ""
-                u = d.get("usage") or {}
-                if "prompt_tokens" in u:
-                    return LLMResult(text, u["prompt_tokens"], u.get("completion_tokens", 0), False, provider, model, stage)
-                return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
-            raise LLMUnavailable(f"unknown provider {provider}")
+            with httpx.Client(transport=transport, timeout=timeout) as client:
+                if provider == "anthropic":
+                    if not settings.anthropic_api_key:
+                        raise LLMUnavailable("ANTHROPIC_API_KEY not set")
+                    resp = client.post(
+                        f"{settings.anthropic_base_url}/v1/messages",
+                        headers={"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01",
+                                 "content-type": "application/json"},
+                        json={"model": model, "max_tokens": max_tokens, "system": system,
+                              "messages": [{"role": "user", "content": prompt}]},
+                    )
+                    if resp.status_code in (429, 500, 502, 503, 529):
+                        raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=resp.request, response=resp)
+                    if resp.status_code >= 400:
+                        raise LLMUnavailable(f"Anthropic HTTP {resp.status_code}: {redact(resp.text[:400])}")
+                    d = resp.json()
+                    text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+                    u = d.get("usage") or {}
+                    if "input_tokens" in u:
+                        tin = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
+                        return LLMResult(text, tin, u.get("output_tokens", 0), False, provider, model, stage)
+                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
+                if provider == "openai":
+                    if not settings.openai_api_key:
+                        raise LLMUnavailable("OPENAI_API_KEY not set")
+                    limit_key = "max_completion_tokens" if "api.openai.com" in settings.openai_base_url else "max_tokens"
+                    resp = client.post(
+                        f"{settings.openai_base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                        json={"model": model, limit_key: max_tokens,
+                              "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
+                    )
+                    if resp.status_code in (429, 500, 502, 503):
+                        raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=resp.request, response=resp)
+                    if resp.status_code >= 400:
+                        raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
+                    d = resp.json()
+                    text = d["choices"][0]["message"].get("content") or ""
+                    u = d.get("usage") or {}
+                    if "prompt_tokens" in u:
+                        return LLMResult(text, u["prompt_tokens"], u.get("completion_tokens", 0), False, provider, model, stage)
+                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
+                raise LLMUnavailable(f"unknown provider {provider}")
         except (httpx.TransportError, httpx.HTTPStatusError) as e:
             last = e
-            time.sleep(2 ** attempt)
+            if attempt < 2:
+                ra = getattr(getattr(e, "response", None), "headers", {}).get("retry-after") if isinstance(e, httpx.HTTPStatusError) else None
+                time.sleep(min(float(ra), 20) if ra and ra.replace(".", "").isdigit() else 2 ** attempt)
+        except (KeyError, ValueError) as e:
+            raise LLMUnavailable(f"{provider}: unexpected response format: {e}")
     raise LLMUnavailable(f"LLM call failed after retries: {redact(str(last))}")

@@ -12,3 +12,4 @@ demos/**/.venv/
 demos/_runs/
 *.db-shm
 *.db-wal
+.vericode_token

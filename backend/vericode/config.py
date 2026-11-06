@@ -23,6 +23,16 @@ DEFAULT_HALF_LIVES: dict[str, float] = {
 }
 
 
+# Category -> domains treated as primary sources (configurable in Settings, persisted).
+DEFAULT_AUTHORITY_RULES: dict[str, list[str]] = {
+    "law_regulation": [".gov", ".gov.uk", ".gov.in", "europa.eu", "eur-lex.europa.eu", "legislation.gov.uk", ".gouv.fr"],
+    "software_version": ["python.org", "nodejs.org", "github.com", "pypi.org", "npmjs.com", "go.dev", "rust-lang.org"],
+    "api_documentation": ["docs.python.org", "developer.mozilla.org", "fastapi.tiangolo.com", "docs.pydantic.dev", "react.dev"],
+    "pricing": [], "leadership": [], "product_spec": [], "release_date": [], "deadline": [".gov"],
+    "current_events": [], "other_volatile": [],
+}
+
+
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
@@ -62,6 +72,20 @@ class Settings:
     # cost per 1M tokens (USD), user-configurable, used only for display
     cost_input_per_mtok: float = field(default_factory=lambda: float(_env("VERICODE_COST_IN", "3.0")))
     cost_output_per_mtok: float = field(default_factory=lambda: float(_env("VERICODE_COST_OUT", "15.0")))
+    # sandbox: auto (docker if daemon reachable, else process), docker, process
+    sandbox_backend: str = field(default_factory=lambda: _env("VERICODE_SANDBOX", "auto"))
+    sandbox_memory: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_MEMORY", "1g"))
+    sandbox_cpus: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_CPUS", "1"))
+    # LLM evidence judge for claims without concrete values (only with a real provider)
+    use_llm_judge: bool = field(default_factory=lambda: _env("VERICODE_LLM_JUDGE", "1") == "1")
+    live_search_default: bool = True
+    tavily_search_depth: str = field(default_factory=lambda: _env("TAVILY_SEARCH_DEPTH", "basic"))
+    default_workspace: str = "sample_project"
+    authority_rules: dict = field(default_factory=lambda: dict(DEFAULT_AUTHORITY_RULES))
+    # network exposure / auth
+    host: str = field(default_factory=lambda: _env("VERICODE_HOST", "127.0.0.1"))
+    allow_remote: bool = field(default_factory=lambda: _env("VERICODE_ALLOW_REMOTE", "0") == "1")
+    llm_timeout: float = field(default_factory=lambda: float(_env("VERICODE_LLM_TIMEOUT", "180")))
 
     @property
     def tavily_api_key(self) -> str:
@@ -104,24 +128,62 @@ class Settings:
             "half_lives": self.half_lives,
             "cost_input_per_mtok": self.cost_input_per_mtok,
             "cost_output_per_mtok": self.cost_output_per_mtok,
+            "sandbox_backend": self.sandbox_backend,
+            "use_llm_judge": self.use_llm_judge,
+            "live_search_default": self.live_search_default,
+            "tavily_search_depth": self.tavily_search_depth,
+            "default_workspace": self.default_workspace,
+            "authority_rules": self.authority_rules,
+            "host": self.host,
+            "allow_remote": self.allow_remote,
+            "openai_base_url": self.openai_base_url,
         }
 
     EDITABLE = {
         "planner_model": str, "coder_model": str, "max_repair_attempts": int, "command_timeout": int,
         "cache_ttl_seconds": int, "tavily_timeout": float, "tavily_max_retries": int,
         "cost_input_per_mtok": float, "cost_output_per_mtok": float, "llm_provider": str,
+        "sandbox_backend": str, "use_llm_judge": bool, "live_search_default": bool, "tavily_search_depth": str,
+        "default_workspace": str,
     }
 
-    def update(self, data: dict) -> None:
+    def load_persisted(self) -> None:
+        """Apply settings saved in SQLite (non-secret values only)."""
+        from . import db
+        for r in db.rows("SELECT key, value FROM settings"):
+            try:
+                self.update({r["key"]: db.loads(r["value"])}, persist=False)
+            except (ValueError, TypeError):
+                continue
+
+    def update(self, data: dict, persist: bool = True) -> None:
         for k, v in data.items():
             if k in self.EDITABLE:
                 if k == "llm_provider" and v not in ("", "anthropic", "openai", "mock"):
                     raise ValueError("invalid provider")
-                setattr(self, k, self.EDITABLE[k](v))
+                if k == "sandbox_backend" and v not in ("auto", "docker", "process"):
+                    raise ValueError("invalid sandbox backend")
+                if k == "tavily_search_depth" and v not in ("basic", "advanced", "fast", "ultra-fast"):
+                    raise ValueError("invalid search depth")
+                if k in ("max_repair_attempts",) and not 0 <= int(v) <= 5:
+                    raise ValueError("max_repair_attempts must be 0-5")
+                cast = self.EDITABLE[k]
+                if cast is bool:
+                    v = v if isinstance(v, bool) else str(v).lower() in ("1", "true", "yes", "on")
+                setattr(self, k, cast(v))
             elif k == "half_lives" and isinstance(v, dict):
                 for cat, days in v.items():
                     if cat in self.half_lives and float(days) > 0:
                         self.half_lives[cat] = float(days)
+            elif k == "authority_rules" and isinstance(v, dict):
+                self.authority_rules = {str(c): [str(d).lower() for d in ds][:50] for c, ds in v.items() if isinstance(ds, list)}
+            else:
+                continue
+            if persist:
+                from . import db
+                with db.tx() as c:
+                    c.execute("INSERT OR REPLACE INTO settings(key,value,updated_at) VALUES(?,?,strftime('%s','now'))",
+                              (k, db.dumps(getattr(self, k)), ))
 
 
 settings = Settings()

@@ -70,6 +70,8 @@ class ProjectEnvironment:
     node_modules: str | None
     fingerprint: str
     warnings: list[str]
+    quality_commands: list[list[str]] = field(default_factory=list)
+    conventions: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -267,7 +269,7 @@ def fingerprint(root: Path) -> str:
 def inspect_project(root: Path, use_cache: bool = True) -> ProjectEnvironment:
     root = root.resolve()
     fp = fingerprint(root)
-    key = f"env:{root}:{fp}"
+    key = f"env2:{root}:{fp}"
     if use_cache:
         cached = db.cache_get(key)
         if cached:
@@ -371,12 +373,66 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
     if "typecheck" in scripts:
         tests.append(["npm", "run", "typecheck"])
 
+    quality: list[list[str]] = []
+    venv_bin = root / ".venv" / "bin"
+    if (venv_bin / "ruff").exists():
+        quality.append(["python", "-m", "ruff", "check", "."])
+    if (venv_bin / "mypy").exists():
+        quality.append(["python", "-m", "mypy", "."])
+    if "lint" in scripts:
+        quality.append(["npm", "run", "lint"])
+    if (root / "tsconfig.json").exists() and (nm / "typescript").is_dir() and "typecheck" not in scripts:
+        quality.append(["npx", "tsc", "--noEmit"])
+
     return ProjectEnvironment(
         root=str(root), name=root.name, languages=dict(langs), frameworks=frameworks,
         manifests=manifests, dependencies=deps, files=files, test_commands=tests,
         config_files=config_files, python_site_packages=str(sp) if sp else None,
         node_modules=str(nm) if nm.is_dir() else None, fingerprint=fp, warnings=warnings,
+        quality_commands=quality, conventions=detect_conventions(root, files, frameworks),
     )
+
+
+def detect_conventions(root: Path, files: list[FileInfo], frameworks: list[str]) -> dict:
+    """Cheap, deterministic style facts the coder should follow (sampled from up to 12 source files)."""
+    indent: Counter = Counter()
+    quotes: Counter = Counter()
+    hints = future = total_defs = 0
+    for f in [x for x in files if not x.is_test][:12]:
+        try:
+            text = (root / f.path).read_text(errors="ignore")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            m = re.match(r"^( +|\t+)\S", line)
+            if m:
+                w = m.group(1)
+                indent["tabs" if "\t" in w else f"{min(len(w), 8) if len(w) in (2, 4, 8) else 4} spaces"] += 1
+        quotes["double"] += len(re.findall(r'(?<![\w"])"[^"\n]*"', text))
+        quotes["single"] += len(re.findall(r"(?<![\w'])'[^'\n]*'", text))
+        if f.language == "Python":
+            defs = re.findall(r"def \w+\(([^)]*)\)\s*(->)?", text)
+            total_defs += len(defs)
+            hints += sum(1 for args, ret in defs if ret or ":" in args)
+            future += "from __future__ import annotations" in text
+    tests = [f.path for f in files if f.is_test]
+    test_style = "pytest functions" if any(f.language == "Python" for f in files if f.is_test) else ("vitest/jest" if tests else "none")
+    out = {
+        "indentation": indent.most_common(1)[0][0] if indent else "unknown",
+        "quotes": quotes.most_common(1)[0][0] if quotes else "unknown",
+        "type_hints": f"{round(100 * hints / total_defs)}% of functions annotated" if total_defs else "n/a",
+        "future_annotations": future > 0,
+        "tests": f"{test_style} in {sorted({str(Path(t).parent) for t in tests})[:3]}" if tests else "no tests found",
+        "frameworks": frameworks,
+    }
+    return out
+
+
+def conventions_text(env: ProjectEnvironment) -> str:
+    c = env.conventions or {}
+    if not c:
+        return "(not detected)"
+    return "; ".join(f"{k}: {v}" for k, v in c.items() if v not in ("unknown", "n/a", [], None))
 
 
 # --- relevant-file selection --------------------------------------------------

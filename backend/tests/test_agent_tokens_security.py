@@ -39,7 +39,7 @@ def test_baseline_needs_repairs_and_uses_more_tokens(sample_project):
     assert b["success"] and not b["first_pass_success"] and b["repair_attempts"] == 3
     assert v["tokens"]["total"] < b["tokens"]["total"]
     assert "planner" in v["tokens"]["by_stage"]  # overhead counted
-    assert v["tokens"]["measurement"] == "estimated"
+    assert v["tokens"]["measurement"] == "MOCK"
 
 
 def test_existing_file_modification_targeted(sample_project):
@@ -127,9 +127,9 @@ def test_token_aggregation_and_separation():
     s = summarize_ledger(L)
     assert (s["input"], s["output"], s["total"], s["calls"]) == (1600, 370, 1970, 3)
     assert s["by_stage"]["planner"] == {"input": 100, "output": 20, "calls": 1}
-    assert s["measurement"] == "provider_reported"
+    assert s["measurement"] == "ACTUAL_PROVIDER_USAGE"
     L.append(llm.LLMResult("", 10, 10, True, "mock", "m", "repair"))
-    assert summarize_ledger(L)["measurement"] == "estimated"
+    assert summarize_ledger(L)["measurement"] == "MOCK"
 
 
 def test_usage_recorded_per_stage():
@@ -206,9 +206,8 @@ def test_memory_only_verified_rules_and_version_invalidation(sample_project, tmp
 
 
 # ---------------------------------------------------------------- API contract
-def test_api_end_to_end(sample_project):
-    from vericode.api import app
-    c = TestClient(app)
+def test_api_end_to_end(sample_project, client):
+    c = client
     assert c.get("/api/health").json()["ok"]
     s = c.get("/api/settings").json()
     assert "tavily_api_key" not in str(s) and s["tavily_configured"] is False

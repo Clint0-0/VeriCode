@@ -21,8 +21,8 @@ from pathlib import Path
 
 from . import db, llm, memory
 from .config import ROOT, settings
-from .repo_intel import ProjectEnvironment, inspect_project, select_relevant_files
-from .security import SecurityError, run_command, safe_join
+from .repo_intel import ProjectEnvironment, conventions_text, inspect_project, select_relevant_files
+from .security import SecurityError, run_command, safe_join, sandbox_backend
 from .skeleton import Skeleton, generate_skeleton
 from .tavily import TavilyClient
 from .verify_api import verify_skeleton
@@ -145,30 +145,76 @@ def unified_diff(orig_root: Path, new_root: Path, paths: list[str]) -> str:
     return "".join(out)
 
 
-def make_sandbox(src: Path, task_id: str) -> Path:
+def make_sandbox(src: Path, task_id: str, link_heavy: bool = True) -> Path:
+    """Disposable copy of the workspace. Dependency dirs are symlinked (process sandbox) or
+    bind-mounted read-only by the container sandbox (link_heavy=False)."""
+    cleanup_runs()
     dst = RUNS_DIR / task_id
     if dst.exists():
         shutil.rmtree(dst)
     shutil.copytree(src, dst, symlinks=True, ignore=shutil.ignore_patterns(".venv", "node_modules", ".git", "__pycache__", ".pytest_cache"))
-    for heavy in (".venv", "node_modules"):
-        if (src / heavy).exists():
-            os.symlink(src / heavy, dst / heavy)
+    if link_heavy:
+        for heavy in (".venv", "node_modules"):
+            if (src / heavy).exists():
+                os.symlink(src / heavy, dst / heavy)
     return dst
 
 
-def run_checks(root: Path, env: ProjectEnvironment) -> dict:
+def cleanup_runs(max_age_s: int = 24 * 3600) -> int:
+    """Delete sandbox copies older than max_age (applied/abandoned runs)."""
+    if not RUNS_DIR.is_dir():
+        return 0
+    n, now = 0, time.time()
+    for d in RUNS_DIR.iterdir():
+        try:
+            if d.is_dir() and now - d.stat().st_mtime > max_age_s:
+                shutil.rmtree(d, ignore_errors=True)
+                n += 1
+        except OSError:
+            continue
+    return n
+
+
+def heavy_mounts(project: Path) -> dict[str, Path]:
+    return {h: project / h for h in (".venv", "node_modules") if (project / h).exists()}
+
+
+def run_checks(root: Path, env: ProjectEnvironment, backend: str = "process", project: Path | None = None,
+               baseline: dict | None = None) -> dict:
+    """Required checks = tests (must pass). Lint/typecheck are regression checks: they fail the run only
+    if they passed on the pristine copy (baseline) and fail after the change."""
     results = []
-    for cmd in env.test_commands or []:
-        r = run_command(cmd, root)
-        results.append({"command": " ".join(cmd), "returncode": r.returncode, "passed": r.returncode == 0,
-                        "stdout": r.stdout[-6000:], "stderr": r.stderr[-3000:], "timed_out": r.timed_out, "isolation": r.isolation})
-    py_files = [f.path for f in env.files if f.language == "Python"]
-    return {"passed": bool(results) and all(x["passed"] for x in results), "results": results,
-            "note": None if results else f"no test command detected ({len(py_files)} python files)"}
+    mounts = heavy_mounts(project) if project else {}
+    for kind, cmds in (("test", env.test_commands or []), ("quality", getattr(env, "quality_commands", []) or [])):
+        for cmd in cmds:
+            r = run_command(cmd, root, backend=backend, ro_mounts=mounts)
+            key = " ".join(cmd)
+            entry = {"command": key, "kind": kind, "returncode": r.returncode, "passed": r.returncode == 0,
+                     "stdout": r.stdout[-6000:], "stderr": r.stderr[-3000:], "timed_out": r.timed_out, "isolation": r.isolation}
+            if kind == "quality":
+                before = (baseline or {}).get(key)
+                entry["required"] = bool(before) and not entry["passed"]  # regression
+                entry["baseline_passed"] = before
+            else:
+                entry["required"] = True
+            results.append(entry)
+    tests = [x for x in results if x["kind"] == "test"]
+    regressions = [x for x in results if x["kind"] == "quality" and x["required"]]
+    return {"passed": bool(tests) and all(x["passed"] for x in tests) and not regressions, "results": results,
+            "validated": bool(tests), "regressions": [x["command"] for x in regressions],
+            "note": None if tests else "no test command detected: changes are UNVALIDATED (reported as partial, never success)"}
+
+
+def quality_baseline(root: Path, env: ProjectEnvironment, backend: str, project: Path) -> dict:
+    out = {}
+    for cmd in getattr(env, "quality_commands", []) or []:
+        r = run_command(cmd, root, backend=backend, ro_mounts=heavy_mounts(project))
+        out[" ".join(cmd)] = r.returncode == 0
+    return out
 
 
 def failure_digest(checks: dict, limit: int = 2500) -> str:
-    txt = "\n".join((r["stdout"] + "\n" + r["stderr"]) for r in checks["results"] if not r["passed"])
+    txt = "\n".join((r["stdout"] + "\n" + r["stderr"]) for r in checks["results"] if not r["passed"] and r.get("required", True))
     # keep the most informative tail: short test summary + error lines
     lines = txt.splitlines()
     key = [l for l in lines if re.search(r"(Error|error|FAILED|assert|Warning|raise|E  )", l)]
@@ -203,7 +249,10 @@ class TaskRunner:
                        {"languages": env.languages, "frameworks": env.frameworks, "warnings": env.warnings})
             installed = {d.name.lower(): d.installed for d in env.dependencies if d.installed}
             invalidated = memory.invalidate_for_versions(installed)
-            sandbox = make_sandbox(self.project, self.task_id)
+            backend = sandbox_backend()
+            sandbox = make_sandbox(self.project, self.task_id, link_heavy=(backend == "process"))
+            self.event("sandbox", f"Isolated workspace copy created (execution backend: {backend})", {"backend": backend})
+            qbase = quality_baseline(sandbox, env, backend, self.project) if getattr(env, "quality_commands", None) else {}
             for dst_rel, src_rel in self.acceptance.items():  # task acceptance tests (demo catalog)
                 src = safe_join(TASKS_DIR, src_rel)
                 dst = safe_join(sandbox, dst_rel)
@@ -231,7 +280,9 @@ class TaskRunner:
                              "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings}}
                 context_paths = paths
                 context = "\n\n".join(file_block(sandbox, p) for p in context_paths if (sandbox / p).exists())
+                conv = conventions_text(env)
                 user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED DEPENDENCIES:\n{deps_summary(env)}\n\n"
+                        f"PROJECT CONVENTIONS:\n{conv}\n\n"
                         f"RELEVANT FILES:\n<untrusted>\n{context}\n</untrusted>\n\nValidation: {', '.join(' '.join(c) for c in env.test_commands)}")
             else:
                 context_paths = [f.path for f in env.files]
@@ -255,7 +306,8 @@ class TaskRunner:
                 changed_all += [c for c in changed if c not in changed_all]
                 self.event(stage, f"Attempt {attempt + 1}: {len(edits)} edits, {len(changed)} files changed, {len(errs)} edit errors",
                            {"changed": changed, "errors": errs})
-                checks = run_checks(sandbox, env) if not errs or changed else {"passed": False, "results": [], "note": "edits failed"}
+                checks = (run_checks(sandbox, env, backend, self.project, qbase) if not errs or changed
+                          else {"passed": False, "results": [], "validated": False, "regressions": [], "note": "edits failed"})
                 if first_pass is None:
                     first_pass = checks["passed"]
                 attempts.append({"attempt": attempt + 1, "stage": stage, "edits": len(edits), "edit_errors": errs,
@@ -278,23 +330,38 @@ class TaskRunner:
                     user = (f"TASK:\n{self.prompt}\n\nREPOSITORY FILES:\n<untrusted>\n{context}\n</untrusted>\n\n"
                             f"VALIDATION FAILED:\n{failure}\nFix it.")
             diff = unified_diff(self.project, sandbox, changed_all)
+            if checks["passed"]:
+                outcome = "succeeded"
+            elif changed_all and not checks.get("validated") and not any(a["edit_errors"] for a in attempts[-1:]):
+                outcome = "partial"  # code changed but no tests exist to validate it
+            else:
+                outcome = "failed"
             result.update({
-                "success": checks["passed"], "first_pass_success": bool(first_pass), "attempts": attempts,
+                "success": checks["passed"], "outcome": outcome, "backend": backend,
+                "first_pass_success": bool(first_pass), "attempts": attempts,
                 "repair_attempts": max(0, len(attempts) - 1), "changed_files": changed_all, "diff": diff,
                 "checks": checks, "sandbox": str(sandbox), "context_files": len(context_paths),
                 "original_hashes": {p: _sha(self.project / p) for p in changed_all},
+                "original_contents": {p: _read(self.project / p) for p in changed_all},
             })
         except Exception as e:  # report, never hide
-            result.update({"success": False, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]})
+            result.update({"success": False, "outcome": "failed", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]})
             self.event("error", result["error"])
         result["duration_s"] = round(time.time() - t0, 2)
         result["tokens"] = summarize_ledger(self.ledger)
         result["search_calls"] = self.tavily.calls
         with db.tx() as c:
-            c.execute("UPDATE tasks SET status=?, finished_at=?, success=?, preflight_json=?, result_json=?, events_json=?, provider=? WHERE id=?",
-                      ("succeeded" if result.get("success") else "failed", time.time(), int(bool(result.get("success"))),
+            c.execute("UPDATE tasks SET status=?, outcome=?, finished_at=?, success=?, preflight_json=?, result_json=?, events_json=?, provider=? WHERE id=?",
+                      (result.get("outcome", "failed"), result.get("outcome", "failed"), time.time(), int(bool(result.get("success"))),
                        db.dumps(preflight), db.dumps(result), db.dumps(self.events), result["provider"], self.task_id))
         return result
+
+
+def _read(p: Path) -> str | None:
+    try:
+        return p.read_text()[:200_000] if p.exists() else None
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _sha(p: Path) -> str | None:
@@ -311,7 +378,7 @@ def summarize_ledger(ledger: list[llm.LLMResult]) -> dict:
     tin = sum(r.input_tokens for r in ledger)
     tout = sum(r.output_tokens for r in ledger)
     return {"input": tin, "output": tout, "total": tin + tout, "calls": len(ledger), "by_stage": by_stage,
-            "estimated": any(r.estimated for r in ledger), "measurement": "estimated" if any(r.estimated for r in ledger) else "provider_reported"}
+            "estimated": any(r.estimated for r in ledger), "measurement": llm.measurement_of(ledger)}
 
 
 def create_task(project: Path, prompt: str, mode: str, benchmark_id: str | None = None) -> str:
@@ -334,6 +401,27 @@ def run_task_async(project: Path, prompt: str, mode: str, max_repairs: int | Non
     return tid
 
 
+class ApplyConflict(ValueError):
+    def __init__(self, conflicts: list[dict]):
+        super().__init__(f"workspace files changed since the run (refusing to overwrite): {[c['path'] for c in conflicts]}")
+        self.conflicts = conflicts
+
+
+def conflict_report(project: Path, res: dict) -> list[dict]:
+    """Files modified in the real workspace after the run started, with the user's diff."""
+    out = []
+    for p, h in res.get("original_hashes", {}).items():
+        cur = project / p
+        if _sha(cur) != h:
+            before = (res.get("original_contents") or {}).get(p) or ""
+            now = _read(cur) or ""
+            udiff = "".join(difflib.unified_diff(before.splitlines(keepends=True), now.splitlines(keepends=True),
+                                                 f"run-start/{p}", f"workspace-now/{p}"))
+            out.append({"path": p, "state": "deleted" if not cur.exists() else ("created" if h is None else "modified"),
+                        "user_diff": udiff[-6000:]})
+    return out
+
+
 def apply_changes(task_id: str) -> dict:
     t = db.row("SELECT * FROM tasks WHERE id=?", (task_id,))
     if not t:
@@ -341,14 +429,22 @@ def apply_changes(task_id: str) -> dict:
     res = db.loads(t["result_json"], {})
     if not res.get("success"):
         raise ValueError("only successful, validated runs can be applied")
+    if res.get("applied_at"):
+        raise ValueError("changes were already applied")
     project, sandbox = Path(t["project_path"]), Path(res["sandbox"])
-    conflicts = [p for p, h in res["original_hashes"].items() if _sha(project / p) != h]
+    if not sandbox.is_dir():
+        raise ValueError("sandbox copy no longer exists (expired); re-run the task")
+    conflicts = conflict_report(project, res)
     if conflicts:
-        raise ValueError(f"workspace files changed since the run (refusing to overwrite): {conflicts}")
+        raise ApplyConflict(conflicts)
     for p in res["changed_files"]:
         dst = safe_join(project, p)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(sandbox / p, dst)
+        existed = dst.exists()
+        shutil.copyfile(sandbox / p, dst)  # content only: keep workspace permissions (sandbox copy may be 0666)
+        if not existed:
+            dst.chmod(0o644)
+    shutil.rmtree(sandbox, ignore_errors=True)  # cleanup after apply
     with db.tx() as c:
         res["applied_at"] = time.time()
         c.execute("UPDATE tasks SET result_json=? WHERE id=?", (db.dumps(res), task_id))

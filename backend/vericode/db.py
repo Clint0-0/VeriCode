@@ -52,6 +52,39 @@ CREATE TABLE IF NOT EXISTS benchmarks (
 );
 """
 
+# Ordered, append-only migrations. Version 1 == the base SCHEMA above.
+MIGRATIONS: list[tuple[int, str]] = [
+    (2, "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at REAL)"),
+    (3, "ALTER TABLE tasks ADD COLUMN outcome TEXT"),
+    (4, "ALTER TABLE token_usage ADD COLUMN measurement TEXT"),
+    (5, "CREATE TABLE IF NOT EXISTS search_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, analysis_id TEXT, "
+        "endpoint TEXT, query TEXT, status TEXT, credits REAL, cached INTEGER, created_at REAL)"),
+    (6, "ALTER TABLE benchmarks ADD COLUMN measurement TEXT"),
+    (7, "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, csrf TEXT, created_at REAL, expires_at REAL)"),
+]
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    c.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY, applied_at REAL)")
+    cur = c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
+    if cur == 0:
+        c.execute("INSERT INTO schema_version VALUES (1, ?)", (time.time(),))
+        cur = 1
+    for version, sql in MIGRATIONS:
+        if version > cur:
+            try:
+                c.execute(sql)
+            except sqlite3.OperationalError as e:  # column already exists (idempotent re-run)
+                if "duplicate column" not in str(e):
+                    raise
+            c.execute("INSERT INTO schema_version VALUES (?, ?)", (version, time.time()))
+    c.commit()
+
+
+def schema_version() -> int:
+    return connect().execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
+
+
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
 _conn_path: str | None = None
@@ -65,6 +98,7 @@ def connect() -> sqlite3.Connection:
             _conn.row_factory = sqlite3.Row
             _conn.execute("PRAGMA journal_mode=WAL")
             _conn.executescript(SCHEMA)
+            _migrate(_conn)
             _conn_path = settings.db_path
         return _conn
 
