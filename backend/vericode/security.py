@@ -252,17 +252,26 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s", True, isolation)
 
 
-def _prepare_writable(cwd: Path) -> None:
-    """Let uid 65534 write into the disposable workspace copy (and nothing else)."""
+def _prepare_writable(cwd: Path, skip: set[str] = frozenset()) -> None:
+    """Let uid 65534 write into the disposable workspace copy (and nothing else). Mount points of read-only
+    dependency dirs are skipped; entries we don't own (e.g. created by a previous container) are left as-is."""
     for root, dirs, files in os.walk(cwd):
+        if Path(root) == cwd:
+            dirs[:] = [d for d in dirs if d not in skip]
         for d in dirs:
             p = Path(root) / d
             if not p.is_symlink():
-                p.chmod(0o777)
+                try:
+                    p.chmod(0o777)
+                except PermissionError:
+                    pass
         for f in files:
             p = Path(root) / f
             if not p.is_symlink():
-                p.chmod(p.stat().st_mode | 0o666)
+                try:
+                    p.chmod(p.stat().st_mode | 0o666)
+                except PermissionError:
+                    pass
     cwd.chmod(0o777)
 
 
@@ -340,7 +349,11 @@ def docker_command(argv: list[str], cwd: Path, ro_mounts: dict[str, Path], name:
 def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, Path]) -> CommandResult:
     import uuid
     name = f"vc-{uuid.uuid4().hex[:10]}"
-    _prepare_writable(cwd)
+    for rel, host in ro_mounts.items():  # pre-create mount points as the current user (dockerd would create them as root)
+        mp = cwd / rel
+        if host.exists() and not mp.exists() and not mp.is_symlink():
+            mp.mkdir(parents=True, exist_ok=True)
+    _prepare_writable(cwd, skip=set(ro_mounts))
     image = self_contained_image()
     if not image:
         ensure_sandbox_image()  # host-toolchain base image is created locally on first use (no registry pull)

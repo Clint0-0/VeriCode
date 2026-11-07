@@ -270,6 +270,9 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
           transport: httpx.BaseTransport | None = None) -> LLMResult:
     last: Exception | None = None
     timeout = httpx.Timeout(settings.llm_timeout, connect=15)
+    key = {"anthropic": settings.anthropic_api_key, "openai": settings.openai_api_key}.get(provider)
+    if provider in ("anthropic", "openai") and not key:  # fail fast: no network/TLS setup without credentials
+        raise LLMUnavailable(f"{provider.upper()}_API_KEY not set")
     for attempt in range(3):
         try:
             with httpx.Client(transport=transport, timeout=timeout) as client:
