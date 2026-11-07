@@ -1,5 +1,56 @@
 # Changelog
 
+## 2.2.0 — offline hardening (`feat/vericode-offline-hardening`)
+**Track 1**
+- New `claim_parse.py`: modular deterministic decomposition.
+  - Subordinate clauses are split (although/whereas/because). Time and conditional clauses stay attached.
+  - Non-restrictive relative clauses on the subject are split out. Coordinated predicates are split as before.
+  - Exact sub-spans (`fragment_span`) whenever a claim is verbatim; `derived` flags carried-over subjects.
+  - Features: hedging, hypotheticals (never verified), comparisons, quantities with units, version ranges,
+    temporal markers (`previously` means a past state), qualifiers/exceptions.
+  - Unresolved pronoun subjects are marked `incomplete`: kept, never searched, never verified.
+- New `source_authority.py`: a configurable trusted-domain registry (government, standards, official software docs,
+  package registries, research, news, encyclopedia, community), plus:
+  - category rules and exact/dot-bounded host matching;
+  - **impersonation detection** (embedded trusted domain, hyphen look-alike, one-character typo);
+  - publisher/entity matching based on proper nouns in the claim, so a `.com` is not official by default;
+  - primary/secondary/unknown/suspicious tiers with explanations.
+- Suspicious sources are never decisive. Newer evidence supersedes older only at comparable authority, and never from community sources.
+
+**Local evidence (combined workflow)**
+- **Fix:** packages whose `top_level.txt` lists a private module first (pytest: `_pytest`) resolved the wrong import
+  name, so their claims were silently unverifiable.
+- **Fix:** the AST cache was keyed by path only, so a long-running server kept serving the pre-upgrade source after a
+  dependency upgrade. It is now keyed by (path, mtime, size).
+- Dotted (`vi.useFakeTimers`) and lowerCamelCase (`createProgram`) symbol detection. The symbol name is shown in the evidence title.
+- Regression tests across pydantic, pytest, zod, vitest and typescript, plus a version-upgrade invalidation test.
+
+**Providers**
+- **Fix:** empty model content is now an error, not a silent "success".
+- **Fix:** streams without a completion event (`message_stop` / `finish_reason`) are rejected as incomplete.
+- **Fix:** malformed or negative usage metadata becomes ESTIMATED instead of crashing.
+- **Fix:** non-numeric Tavily `usage.credits` no longer breaks parsing.
+- `MOCK_PROVIDER_NO_SCRIPT` now lists the supported demo tasks and the exact environment variables needed.
+- 31 provider/Tavily **contract** tests (fake transports; not live).
+
+**Sandbox**
+- `docker_command()` refactor.
+- Optional **self-contained image** mode (`docker/sandbox.Dockerfile`, `scripts/build_sandbox_image.sh`), with no host `/usr` mount.
+- In host mode, a venv interpreter prefix outside `/usr` (pyenv, setup-python) is mounted read-only.
+- Added `--ipc private`, `--ulimit nofile`, and forced container removal on timeout.
+- New tests: read-only dependency dirs, TypeScript check inside the container, cleanup, malicious commands.
+
+**Offline and repository**
+- `scripts/demo.sh offline` runs A/B/D/E and the benchmark, each with an expected-outcome check (non-zero exit on UNEXPECTED).
+- New docs: `docs/OFFLINE_DEMO.md`, `docs/SETUP_WINDOWS.md` (WSL2), `docs/PROBLEM_STATEMENTS.md` plus a placeholder for the official documents.
+- `.gitattributes` enforces LF.
+- Key-free GitHub Actions CI.
+- UI: authority tier and explanation badges, claim derivation and linguistic feature badges.
+
+**Tests:**
+- Backend 120 → 228 passed, including 6 browser e2e, plus 2 opt-in live tests that skip without keys.
+- Frontend 8 → 9.
+
 ## 2.1.0 — final validation (`feat/vericode-final-validation`)
 - **Combined workflow** (`local_evidence.py`, Demo E): Track 1 claims about libraries installed in a selected
   workspace are checked against the installed source. Python uses the AST resolver; TypeScript uses the compiler API.

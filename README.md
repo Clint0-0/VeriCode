@@ -35,13 +35,16 @@ scripts/test.sh         # backend + frontend tests
 scripts/demo.sh all     # A Python compat · B TypeScript compat · D stale answer · E combined · C arbitrary task · 3 benchmark
 ```
 
+No keys yet? `scripts/demo.sh offline` runs every key-free demo with an OK/UNEXPECTED check
+([docs/OFFLINE_DEMO.md](docs/OFFLINE_DEMO.md)). **Windows:** use WSL2 ([docs/SETUP_WINDOWS.md](docs/SETUP_WINDOWS.md)).
+
 If the Docker daemon is running, test commands execute in a container. Otherwise they run in the labelled
 process sandbox (`VERICODE_SANDBOX=auto|docker|process`).
 
 ## The two problem statements and why they are combined
 
-The official problem-statement documents were **not available** in the workspace, so this README doesn't quote
-them. Our selection, in our own words:
+Full rationale: [docs/PROBLEM_STATEMENTS.md](docs/PROBLEM_STATEMENTS.md). The official problem-statement documents
+were **not available**, so this README doesn't quote them; add them to `docs/problem-statements/`. Our selection, in our own words:
 - **Track 1, PS1:** detect stale or incorrect information in LLM answers and verify it against evidence.
 - **Track 2, PS1:** stop AI coding agents from using APIs that don't match the installed dependencies, while using fewer tokens.
 
@@ -56,13 +59,17 @@ Track 2 also act as *version-specific evidence* for Track 1 claims about librari
 | Repository inspection (manifests, lockfiles, installed versions, conventions, relevant files, cache invalidation) | Implemented and tested |
 | Python API verification (static AST: re-exports, `_dynamic_imports`, inherited methods, `@deprecated`, `warnings.warn`, removed kwargs, migration messages) | Implemented and tested against real pydantic 2.9.2 |
 | TypeScript verification via the compiler API (module resolution, exports, members, signatures, generics, `@deprecated`, call type-check) | Implemented and tested against real zod 3.23.8 |
-| Claim extraction: compound splitting with spans, negation, conditionals, opinions, date ranges | Implemented and tested (deterministic). LLM extraction implemented; mocked-HTTP tests only |
+| Claim extraction: modular clause decomposition (subordinate, relative, coordinated) with exact spans; negation, conditionals, hedging, hypotheticals, opinions, comparisons, units, version ranges, temporal markers, qualifiers, unresolved-subject handling | Implemented and tested (26-case deterministic dataset). LLM extraction implemented; mocked-HTTP tests only |
+| Source authority registry: exact/subdomain matching, impersonation detection, entity matching, primary/secondary/unknown/suspicious tiers | Implemented and tested (offline fixtures incl. impersonation and unrelated official sources) |
 | Semantic verification: lexical + negation | Implemented and tested |
 | LLM evidence judge (quotes must appear verbatim in the source) | Implemented; mocked-HTTP tests only, **not live-tested** |
+| Provider and Tavily **contract tests** (malformed/empty/missing fields, invalid usage, incomplete streams, 401/429/5xx, timeouts, retry exhaustion, provider switching) | Implemented and tested with fake transports. These are **not** live tests |
 | Tavily search + extract (aligned with the current OpenAPI spec: `include_published_date`, `include_usage`, `include_domains_mode`, 432/433 quota codes) | Implemented; mocked-HTTP tests. **Not live-tested**: no key, and `api.tavily.com` is blocked by this build environment's egress proxy |
 | Anthropic + OpenAI providers, structured outputs, retries, timeouts, provider-reported usage | Implemented; mocked-HTTP tests. **Not live-tested** (no key) |
 | Coding agent on arbitrary tasks (real provider) | Implemented. Only the scripted mock has been run here (3 bundled tasks) |
-| Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes run inside the container) |
+| Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes, fork bomb, host-file and symlink escape, read-only dependency dirs, TypeScript check in container, cleanup) |
+| Self-contained sandbox image (no host `/usr` mount) | Implemented. Command construction tested; image **build not executed here** (needs a registry pull) |
+| GitHub Actions CI (key-free) | Added (`.github/workflows/ci.yml`). Not yet observed running on GitHub from this environment |
 | Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
 | Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
 | Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. **All recorded numbers are MOCK** |
@@ -71,6 +78,15 @@ Track 2 also act as *version-specific evidence* for Track 1 claims about librari
 | Provider streaming (Anthropic SSE, OpenAI `stream_options.include_usage`) for coder/repair, with usage from stream events | Implemented; mocked-HTTP tests only, **not live-tested** |
 | Per-model cost (user-entered prices; never invented, never for MOCK) | Implemented and tested |
 | Browser end-to-end tests (real server + Chromium): login, Track 1, combined, pre-flight heatmap, coding task, all 8 screens, mobile | Implemented and passing |
+
+## After configuring API keys (exact commands)
+```bash
+# in .env: TAVILY_API_KEY=...  ANTHROPIC_API_KEY=... (or OPENAI_API_KEY=...)  VERICODE_CODER_MODEL=<model id>  [VERICODE_PLANNER_MODEL=<model id>]
+VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs   # live Tavily + real planner/coder
+scripts/demo.sh d --live          # Track 1 with live Tavily retrieval (+ LLM evidence judge if an LLM key is set)
+scripts/demo.sh c                 # arbitrary coding task with the real model (baseline and VeriCode)
+scripts/demo.sh 3 --runs 3        # ACTUAL_PROVIDER_USAGE benchmark (3 runs per mode)
+```
 
 ## Blockers for full live validation (require user action)
 

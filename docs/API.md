@@ -40,5 +40,9 @@ rejected_kwargs, migration_hint, resolution_path}, argument_checks[], live{statu
 
 Evidence record fields: `claim_id, original_claim, title, url, domain, source_type, authority, retrieved_at,
 published_date, excerpt, relevance, relevance_explanation, outcome (support|contradict|neutral|irrelevant),
-origin (live_tavily|user_url|fixture|fixture_synthetic), method (value|lexical|llm_judge|none), freshness, age_days, replacement`.
+origin (live_tavily|user_url|fixture|fixture_synthetic|installed_source), method (value|lexical|llm_judge|installed_source|none), authority_tier (primary|secondary|unknown|suspicious), authority_explanation, freshness, age_days, replacement`.
+Claim objects also carry `fragment_span` (exact sub-span when the claim text is verbatim), `derived`, `relation` (main |
+coordinated | relative | subordinate:<conj>), `hedged`, `hypothetical`, `features{hedges, qualifiers, comparison,
+quantities, version_ranges, temporal_markers, past_state, incomplete}`, `notes`. `verifiability` is one of verifiable |
+conditional | opinion | hypothetical | incomplete.
 Task results include `outcome` (succeeded | partial | failed), `backend` (docker | process), checks with `kind` (test | quality) and `required`.

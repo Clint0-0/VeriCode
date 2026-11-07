@@ -1,5 +1,7 @@
 # Setup, running and testing
 
+**Windows:** use WSL2. See [SETUP_WINDOWS.md](SETUP_WINDOWS.md). **Offline demos:** [OFFLINE_DEMO.md](OFFLINE_DEMO.md).
+
 **Requirements:** Python ≥ 3.11 (tested 3.13), Node ≥ 20 (tested 22), Linux/macOS. Docker (recommended) enables the
 container sandbox. No image pull is needed; VeriCode builds a tiny local base image. Without Docker, `unshare`
 (util-linux) gives network-isolated process runs on Linux.
@@ -42,6 +44,13 @@ API scripts can send `Authorization: Bearer <token>`.
 server with a temp DB and drive Chromium through login, Track 1, the combined workflow, the pre-flight heatmap,
 a coding task, all 8 screens and the mobile layout. Requires `backend/requirements-dev.txt` (Playwright), a system
 Chrome/Chromium and a built frontend. Skipped otherwise.
+
+**Optional self-contained sandbox image** (avoids mounting host `/usr`; needed for Docker Desktop on macOS):
+`scripts/build_sandbox_image.sh` (pulls `python:3.13-slim` once). It is picked up automatically.
+
+**CI:** `.github/workflows/ci.yml` runs key-free on pushes to `feat/**` and `main`, and on pull requests:
+backend tests (process sandbox, then the Docker sandbox subset), the offline demo suite, frontend
+typecheck/tests/build, and browser e2e. Live tests always skip there (no secrets configured).
 
 **Tests:** `scripts/test.sh`
 - backend: `.venv/bin/python -m pytest -q backend/tests` (dependency, API-verification, Tavily, stale-answer, agent,
