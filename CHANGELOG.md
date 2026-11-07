@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.3.0 — live validation (`feat/vericode-live-validation`)
+**Live (Groq via OpenAI-compatible adapter + Tavily, run in GitHub Actions; details in docs/LIVE_VALIDATION.md)**
+- New `vericode.live_validation` harness: config/model availability, text, structured planner, API skeleton,
+  streaming usage, error handling, evidence judge with quote verification, Tavily search/extract/persistence,
+  Track 1 scenarios A-D, Demo E, new Python + TypeScript + arbitrary coding tasks, actual-token benchmark, and a
+  check of the API data behind every screen. No MOCK/fixture fallback; refuses to write a report containing a key.
+- `.github/workflows/live.yml`: manual workflow reading keys from repo secrets, model/endpoint from repo variables.
+
+**Fixes found by the live run**
+- Pre-flight: a class written into the import path (`pydantic.BaseModel` + `model_dump`) was reported NOT_FOUND;
+  trailing path segments are now retried as attributes. The false finding had made the coder add a bogus fallback.
+- Providers: output truncation (`finish_reason=length` / `max_tokens`) is detected; the truncated call's usage is
+  recorded and the call is retried once with double the budget (cap 8192). Empty output at the limit is a clear
+  error. HTTP 429 after retries now says it is a rate limit and passes on `retry-after`.
+- Optional `VERICODE_REASONING_EFFORT` (sent only when set).
+- Offline tests no longer pick up a developer `.env` endpoint.
+
+**Measured**: first ACTUAL_PROVIDER_USAGE benchmark - VeriCode 9/9 successes vs baseline 6/9, but -250.3% token
+savings on the one task where both always succeeded. Historical MOCK numbers kept separately.
+
 ## 2.2.0 — offline hardening (`feat/vericode-offline-hardening`)
 **Track 1**
 - New `claim_parse.py`: modular deterministic decomposition.

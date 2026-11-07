@@ -62,46 +62,67 @@ Track 2 also act as *version-specific evidence* for Track 1 claims about librari
 | Claim extraction: modular clause decomposition (subordinate, relative, coordinated) with exact spans; negation, conditionals, hedging, hypotheticals, opinions, comparisons, units, version ranges, temporal markers, qualifiers, unresolved-subject handling | Implemented and tested (26-case deterministic dataset). LLM extraction implemented; mocked-HTTP tests only |
 | Source authority registry: exact/subdomain matching, impersonation detection, entity matching, primary/secondary/unknown/suspicious tiers | Implemented and tested (offline fixtures incl. impersonation and unrelated official sources) |
 | Semantic verification: lexical + negation | Implemented and tested |
-| LLM evidence judge (quotes must appear verbatim in the source) | Implemented; mocked-HTTP tests only, **not live-tested** |
+| LLM evidence judge (quotes must appear verbatim in the source) | **Live-tested** with Groq `openai/gpt-oss-120b`: verbatim quotes accepted, quote-less verdicts discarded ([report](docs/LIVE_VALIDATION.md)) |
 | Provider and Tavily **contract tests** (malformed/empty/missing fields, invalid usage, incomplete streams, 401/429/5xx, timeouts, retry exhaustion, provider switching) | Implemented and tested with fake transports. These are **not** live tests |
-| Tavily search + extract (aligned with the current OpenAPI spec: `include_published_date`, `include_usage`, `include_domains_mode`, 432/433 quota codes) | Implemented; mocked-HTTP tests. **Not live-tested**: no key, and `api.tavily.com` is blocked by this build environment's egress proxy |
-| Anthropic + OpenAI providers, structured outputs, retries, timeouts, provider-reported usage | Implemented; mocked-HTTP tests. **Not live-tested** (no key) |
-| Coding agent on arbitrary tasks (real provider) | Implemented. Only the scripted mock has been run here (3 bundled tasks) |
+| Tavily search + extract (aligned with the current OpenAPI spec: `include_published_date`, `include_usage`, `include_domains_mode`, 432/433 quota codes) | **Live-tested** in GitHub Actions: search, extract, dates, retrieval timestamps, credits, persistence |
+| Anthropic + OpenAI-compatible providers, structured outputs, retries, timeouts, provider-reported usage | OpenAI-compatible path **live-tested with Groq** (text, structured planner, skeleton, streaming, usage, errors). Anthropic: mocked-HTTP only (no key). Output truncation (`finish_reason=length`) and 429 are handled explicitly |
+| Coding agent on arbitrary tasks (real provider) | **Live with Groq**: new Python task and Demo C passed first try; new TypeScript task failed on planner truncation (fixed, not yet re-confirmed live) |
 | Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes, fork bomb, host-file and symlink escape, read-only dependency dirs, TypeScript check in container, cleanup) |
 | Self-contained sandbox image (no host `/usr` mount) | Implemented. Command construction tested; image **build not executed here** (needs a registry pull) |
 | GitHub Actions CI (key-free) | Implemented and **passing on GitHub**: backend 222 + 16 Docker-sandbox tests, offline demo suite, frontend typecheck/tests/build, 6 browser e2e |
 | Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
 | Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
-| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. **All recorded numbers are MOCK** |
+| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. One **ACTUAL_PROVIDER_USAGE** run on Groq (see below); historical MOCK numbers kept separately |
 | Combined workflow: Track 1 API claims checked against installed packages (Python AST / TS compiler) | Implemented and tested (real pydantic 2.9.2 / zod 3.23.8) |
 | Confidence heatmap (per library × planned API, colours = verification status, plus "auto-corrected" from the final diff) | Implemented and tested (UI + e2e) |
-| Provider streaming (Anthropic SSE, OpenAI `stream_options.include_usage`) for coder/repair, with usage from stream events | Implemented; mocked-HTTP tests only, **not live-tested** |
+| Provider streaming (Anthropic SSE, OpenAI `stream_options.include_usage`) for coder/repair, with usage from stream events | OpenAI-compatible streaming **live-tested on Groq**: usage arrives in the stream (ACTUAL, not ESTIMATED) |
 | Per-model cost (user-entered prices; never invented, never for MOCK) | Implemented and tested |
 | Browser end-to-end tests (real server + Chromium): login, Track 1, combined, pre-flight heatmap, coding task, all 8 screens, mobile | Implemented and passing |
 
-## After configuring API keys (exact commands)
+## Live configuration (Groq + Tavily, no Anthropic key needed)
+Groq runs through the existing OpenAI-compatible adapter. In `.env` (gitignored, never commit it):
 ```bash
-# in .env: TAVILY_API_KEY=...  ANTHROPIC_API_KEY=... (or OPENAI_API_KEY=...)  VERICODE_CODER_MODEL=<model id>  [VERICODE_PLANNER_MODEL=<model id>]
-VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs   # live Tavily + real planner/coder
-scripts/demo.sh d --live          # Track 1 with live Tavily retrieval (+ LLM evidence judge if an LLM key is set)
-scripts/demo.sh c                 # arbitrary coding task with the real model (baseline and VeriCode)
-scripts/demo.sh 3 --runs 3        # ACTUAL_PROVIDER_USAGE benchmark (3 runs per mode)
+TAVILY_API_KEY=...                                   # https://app.tavily.com
+VERICODE_LLM_PROVIDER=openai
+OPENAI_API_KEY=...                                   # Groq key from https://console.groq.com/keys
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+VERICODE_CODER_MODEL=openai/gpt-oss-120b             # any chat model id listed for your Groq account
+VERICODE_PLANNER_MODEL=openai/gpt-oss-120b
+VERICODE_DEMO_MODE=0
+# VERICODE_REASONING_EFFORT=low                      # optional; sent as reasoning_effort only when set
 ```
+Commands:
+```bash
+cd backend && ../.venv/bin/python -m vericode.live_validation --runs 3   # full live harness -> reports/live/
+VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs
+scripts/demo.sh d --live          # Track 1 with live Tavily + Groq evidence judge
+scripts/demo.sh c                 # arbitrary coding task, baseline and VeriCode
+scripts/demo.sh 3 --runs 3        # ACTUAL_PROVIDER_USAGE benchmark
+```
+In GitHub: put the two keys in **Secrets** and the other four values in **Variables** (Settings -> Secrets and
+variables -> Actions), then Actions -> "Live validation (manual, uses API credits)" -> Run workflow. It is manual so
+it never spends credits on a push. Use `only=` to run selected harness sections.
 
-## Blockers for full live validation (require user action)
-
-| Blocker | Action |
-|---|---|
-| No `TAVILY_API_KEY`; `api.tavily.com` refused by this build environment's egress proxy | Add the key to `.env`, run where Tavily is reachable (or allow the domain), then `VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest backend/tests -m live` |
-| No LLM key (`api.openai.com` also blocked here; `api.anthropic.com` reachable) | Set `ANTHROPIC_API_KEY` (or OpenAI) + `VERICODE_CODER_MODEL`, then `scripts/demo.sh c` and `scripts/demo.sh 3 --runs 3` |
-
-Until then, **these Definition-of-Done items are not met:** real Tavily retrieval, a real LLM provider, real
-evidence judging, an arbitrary task run on a real model, and actual-token benchmark results.
+## Live validation status
+Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Real Groq and Tavily calls succeeded for config,
+text, structured planner, skeleton, streaming, error handling, evidence judge, Tavily search/extract, Track 1
+scenarios A-D, Demo E, a new Python task and Demo C. Still open: the TypeScript task (failed on output truncation;
+fix added, re-run blocked by Groq HTTP 429 rate limits) and a benchmark on the fixed code.
 
 ## Measured results (honest)
 
-Real-provider numbers: **none yet** (no LLM key available while this was built). The only benchmark that has run
-used the **scripted mock provider (MOCK, chars/4)**. It demonstrates the mechanics, not real-model efficiency:
+**Actual provider usage (Groq `openai/gpt-oss-120b`, 3 runs per mode, run 42397432837):**
+
+| Task | Success (B/V) | Baseline tokens | VeriCode tokens | Savings |
+|---|---|---|---|---|
+| users (pydantic v1 APIs planned) | 33% / 100% | 5,449.7 | 4,316.3 | not computed (baseline failures) |
+| summary (no API risk) | 67% / 100% | 2,874 | 2,713.3 | not computed (baseline failure) |
+| signup (TypeScript zod) | 100% / 100% | 776.7 | 2,721 | **-250.3%** |
+
+VeriCode finished every run; the baseline failed 3 of 9. Where both always succeeded, VeriCode cost 3.5x the tokens.
+No positive actual-token savings figure has been measured yet.
+
+**Historical MOCK benchmark (scripted provider, chars/4 - mechanics only, not comparable with the table above):**
 
 | Task | Baseline | VeriCode | Savings | First pass (B/V) | Final success (B/V) |
 |---|---|---|---|---|---|
@@ -111,15 +132,15 @@ used the **scripted mock provider (MOCK, chars/4)**. It demonstrates the mechani
 
 The negative row is kept on purpose. On a tiny repository the planner overhead (607 tokens) costs more than the
 context it saves. In that run the baseline also shipped the deprecated `nonempty()` call, which tests don't catch.
-With real credentials, run `scripts/demo.sh 3 --runs 3` to get `ACTUAL_PROVIDER_USAGE` results. The dashboard keeps
-mock and real benchmarks apart.
+The dashboard keeps mock and real benchmarks apart.
 
 ## Required environment variables
 
 | Variable | Needed for |
 |---|---|
 | `TAVILY_API_KEY` | live evidence (Track 1, API docs fallback) |
-| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (+ `OPENAI_BASE_URL` for compatible gateways) | real planner, coder, judge |
+| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (+ `OPENAI_BASE_URL` for compatible gateways such as Groq) | real planner, coder, judge |
+| `VERICODE_REASONING_EFFORT` (optional) | sent as `reasoning_effort` to OpenAI-compatible endpoints only when set |
 | `VERICODE_CODER_MODEL` (and optionally `VERICODE_PLANNER_MODEL`) | model ids, never hardcoded |
 | `VERICODE_LLM_PROVIDER=mock` | explicit offline demo mode (chosen automatically when no key is set and `VERICODE_DEMO_MODE=1`) |
 | `VERICODE_SANDBOX`, `VERICODE_SANDBOX_MEMORY`, `VERICODE_SANDBOX_CPUS` | execution isolation |
@@ -130,12 +151,20 @@ A configured real provider that fails returns an error. It never falls back to m
 ## Documentation
 
 [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Security](docs/SECURITY.md) ·
-[Benchmark method](docs/BENCHMARK.md) · [Demo guide](docs/DEMO.md) · [Setup & testing](docs/SETUP.md) · [Changelog](CHANGELOG.md)
+[Benchmark method](docs/BENCHMARK.md) · [Live validation](docs/LIVE_VALIDATION.md) · [Demo guide](docs/DEMO.md) · [Setup & testing](docs/SETUP.md) · [Changelog](CHANGELOG.md)
 
 ## Known limitations
 
-- No live Tavily or LLM run has been performed (credentials unavailable, and Tavily/OpenAI hosts are blocked by the
-  build sandbox). Live tests exist: `VERICODE_LIVE_TESTS=1 scripts/test.sh -m live`.
+- Live runs so far: Groq (`openai/gpt-oss-120b`) + Tavily in GitHub Actions only; Anthropic never live-tested.
+  Groq free-tier rate limits (HTTP 429) cut the last validation run short.
+- Measured actual-token cost is **higher** with VeriCode on the small demo repositories; its value shown so far is
+  reliability (9/9 vs 6/9 successes), not token savings.
+- Track 1 can return `CONFLICTING_EVIDENCE` instead of `CONTRADICTED` for an outdated "latest version" claim when an
+  old official page supports the old value and the newer page is undated (recency cannot decide undated sources).
+- The LLM judge can decide a claim from an `unknown`-tier source when its quote is verbatim; confidence stays low
+  (33-51 in the live run), but the status is still decisive.
+- The sentence splitter treats a sentence that starts with a lowercase word (e.g. "zod provides ...") as part of
+  the previous sentence.
 - The deterministic claim splitter handles common English structures. Complex rhetoric needs the optional LLM
   extraction, which requires a real provider. Lexical support is weaker than value or judge evidence and is penalised in confidence.
 - Source authority comes from configurable rules plus heuristics: domain classes, and the claim's entity matching
