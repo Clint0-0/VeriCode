@@ -90,3 +90,13 @@ def test_malicious_commands_never_reach_docker(tmp_path):
     for argv in (["docker", "run", "alpine"], ["python", "-c", "import os; os.system('id')"], ["npm", "exec", "rimraf", "/"]):
         with pytest.raises(security.SecurityError):
             security.run_command(argv, tmp_path, backend="docker")
+
+
+def test_venv_interpreter_outside_usr_is_mounted(tmp_path):
+    prefix = tmp_path / "toolcache" / "Python" / "3.13.1"
+    (prefix / "bin").mkdir(parents=True)
+    venv = tmp_path / "proj" / ".venv"
+    venv.mkdir(parents=True)
+    (venv / "pyvenv.cfg").write_text(f"home = {prefix / 'bin'}\ninclude-system-site-packages = false\nversion = 3.13.1\n")
+    cmd, _, _ = security.docker_command(["python", "-m", "pytest"], tmp_path, {".venv": venv}, "vc-z")
+    assert f"{prefix.resolve()}:{prefix.resolve()}:ro" in cmd

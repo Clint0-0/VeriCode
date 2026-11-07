@@ -313,6 +313,14 @@ def docker_command(argv: list[str], cwd: Path, ro_mounts: dict[str, Path], name:
         env += ["-e", "PATH=/work/node_modules/.bin:/usr/local/bin:/usr/bin:/bin"]
         label = f"docker(self-contained image {image})"
     else:
+        venv = ro_mounts.get(".venv")
+        cfg = venv / "pyvenv.cfg" if venv else None
+        if cfg and cfg.is_file():  # venv interpreter outside /usr (pyenv, setup-python, conda): mount its prefix read-only
+            home = next((l.split("=", 1)[1].strip() for l in cfg.read_text().splitlines() if l.strip().startswith("home")), "")
+            if home:
+                prefix = Path(home).resolve().parent
+                if not str(prefix).startswith("/usr") and prefix != Path("/") and prefix.is_dir():
+                    cmd += ["-v", f"{prefix}:{prefix}:ro"]
         node = shutil.which("node")
         if node:
             node_root = Path(node).resolve().parents[1]
