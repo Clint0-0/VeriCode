@@ -78,3 +78,9 @@ def test_class_in_import_path_resolves_method(sample_project):
     assert check("pydantic.BaseModel", "model_dump").status == "VERIFIED_LOCAL"
     assert check("pydantic.BaseModel", "dict").status == "DEPRECATED"
     assert check("pydantic.BaseModel", "definitely_not_an_api").status == "NOT_FOUND"
+
+
+def test_rate_limit_reported_clearly(openai_groq):
+    h = lambda req: httpx.Response(429, headers={"retry-after": "37"}, json={})
+    with pytest.raises(llm.LLMUnavailable, match=r"rate limited \(HTTP 429\).*retry after 37s"):
+        llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))

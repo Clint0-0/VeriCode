@@ -262,7 +262,9 @@ def run_bench(runs: int) -> dict:
                       **{m: {k: s[m][k] for k in ("success_rate", "first_pass_rate", "total_tokens", "input_tokens", "output_tokens",
                                                    "verification_overhead_tokens", "repair_attempts", "search_calls", "duration_s",
                                                    "by_stage", "measurement", "errors")} for m in ("baseline", "vericode")}})
-    return {"status": OK if b["measurement"] == "ACTUAL_PROVIDER_USAGE" else FAILED, "benchmark_id": b["id"],
+    ok = b["measurement"] == "ACTUAL_PROVIDER_USAGE" and b["comparable_tasks"] > 0
+    return {"status": OK if ok else FAILED, "benchmark_id": b["id"],
+            **({} if ok else {"error": "no task had all runs succeed in both modes; savings not computed (see per-task errors)"}),
             "measurement": b["measurement"], "model": b["coder_model"], "runs_per_mode": runs,
             "average_savings_pct": b["average_savings_pct"], "comparable_tasks": b["comparable_tasks"], "tasks": tasks}
 

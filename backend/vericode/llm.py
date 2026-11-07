@@ -357,4 +357,10 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                 time.sleep(min(float(ra), 20) if ra and ra.replace(".", "").isdigit() else 2 ** attempt)
         except (KeyError, ValueError) as e:
             raise LLMUnavailable(f"{provider}: unexpected response format: {e}")
+    resp = getattr(last, "response", None)
+    if resp is not None and resp.status_code == 429:
+        ra = resp.headers.get("retry-after")
+        raise LLMUnavailable(f"{provider}: rate limited (HTTP 429) after retries"
+                             + (f"; provider asks to retry after {ra}s" if ra else "")
+                             + ". Account quota or per-minute limit reached; wait and re-run.")
     raise LLMUnavailable(f"LLM call failed after retries: {redact(str(last))}")
