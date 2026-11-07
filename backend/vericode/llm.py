@@ -60,6 +60,24 @@ def measurement_of(ledger: list[LLMResult]) -> str:
     return ACTUAL
 
 
+def _valid_count(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
+def _anthropic_usage(u: dict) -> tuple[int, int] | None:
+    keys = ("input_tokens", "output_tokens")
+    if not all(_valid_count(u.get(k)) for k in keys):
+        return None
+    extra = sum(u.get(k, 0) for k in ("cache_read_input_tokens", "cache_creation_input_tokens") if _valid_count(u.get(k, 0)))
+    return u["input_tokens"] + extra, u["output_tokens"]
+
+
+def _openai_usage(u: dict) -> tuple[int, int] | None:
+    if not (_valid_count(u.get("prompt_tokens")) and _valid_count(u.get("completion_tokens"))):
+        return None
+    return u["prompt_tokens"], u["completion_tokens"]
+
+
 def estimate_tokens(text: str) -> int:
     """Rough estimate (~4 chars/token). Always labelled as estimated."""
     return max(1, (len(text) + 3) // 4)
@@ -210,28 +228,37 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         if resp.status_code >= 400:
             resp.read()
             raise LLMUnavailable(f"{provider} HTTP {resp.status_code}: {redact(resp.text[:400])}")
-        text, tin, tout, have_usage = [], 0, 0, False
+        text, tin, tout, have_usage, complete = [], 0, 0, False, False
         for ev in _sse_events(resp):
             if provider == "anthropic":
                 t = ev.get("type")
                 if t == "message_start":
-                    u = (ev.get("message") or {}).get("usage") or {}
-                    tin = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
-                    tout = u.get("output_tokens", 0)
-                    have_usage = "input_tokens" in u
+                    usage = _anthropic_usage((ev.get("message") or {}).get("usage") or {})
+                    if usage:
+                        tin, tout, have_usage = usage[0], usage[1], True
                 elif t == "content_block_delta" and (ev.get("delta") or {}).get("type") == "text_delta":
                     text.append(ev["delta"].get("text", ""))
                 elif t == "message_delta":
-                    tout = (ev.get("usage") or {}).get("output_tokens", tout)
+                    ot = (ev.get("usage") or {}).get("output_tokens")
+                    if _valid_count(ot):
+                        tout = ot
+                elif t == "message_stop":
+                    complete = True
                 elif t == "error":
                     raise LLMUnavailable(f"anthropic stream error: {redact(json.dumps(ev.get('error'))[:300])}")
             else:
                 for ch in ev.get("choices") or []:
                     text.append(((ch.get("delta") or {}).get("content")) or "")
-                u = ev.get("usage")
-                if u:
-                    tin, tout, have_usage = u.get("prompt_tokens", 0), u.get("completion_tokens", 0), True
+                    if ch.get("finish_reason"):
+                        complete = True
+                usage = _openai_usage(ev.get("usage") or {}) if ev.get("usage") else None
+                if usage:
+                    tin, tout, have_usage = usage[0], usage[1], True
         out = "".join(text)
+        if not complete:
+            raise LLMUnavailable(f"{provider}: incomplete stream (connection ended before the completion event); partial output discarded")
+        if not out.strip():
+            raise LLMUnavailable(f"{provider} returned empty content")
         if have_usage:
             return LLMResult(out, tin, tout, False, provider, model, stage)
         return LLMResult(out, estimate_tokens(system + prompt), estimate_tokens(out), True, provider, model, stage)
@@ -265,11 +292,14 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                     if resp.status_code >= 400:
                         raise LLMUnavailable(f"Anthropic HTTP {resp.status_code}: {redact(resp.text[:400])}")
                     d = resp.json()
-                    text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
-                    u = d.get("usage") or {}
-                    if "input_tokens" in u:
-                        tin = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
-                        return LLMResult(text, tin, u.get("output_tokens", 0), False, provider, model, stage)
+                    if not isinstance(d, dict) or not isinstance(d.get("content"), list):
+                        raise ValueError("missing 'content' list")
+                    text = "".join(b.get("text", "") for b in d["content"] if isinstance(b, dict) and b.get("type") == "text")
+                    if not text.strip():
+                        raise LLMUnavailable(f"Anthropic returned empty content (stop_reason={d.get('stop_reason')})")
+                    usage = _anthropic_usage(d.get("usage") or {})
+                    if usage:
+                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage)
                     return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
                 if provider == "openai":
                     if not settings.openai_api_key:
@@ -287,9 +317,11 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
                     d = resp.json()
                     text = d["choices"][0]["message"].get("content") or ""
-                    u = d.get("usage") or {}
-                    if "prompt_tokens" in u:
-                        return LLMResult(text, u["prompt_tokens"], u.get("completion_tokens", 0), False, provider, model, stage)
+                    if not text.strip():
+                        raise LLMUnavailable(f"OpenAI returned empty content (finish_reason={d['choices'][0].get('finish_reason')})")
+                    usage = _openai_usage(d.get("usage") or {})
+                    if usage:
+                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage)
                     return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
                 raise LLMUnavailable(f"unknown provider {provider}")
         except (httpx.TransportError, httpx.HTTPStatusError) as e:

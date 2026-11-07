@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import json
 
-NO_SCRIPT = "MOCK_PROVIDER_NO_SCRIPT: the scripted mock provider only supports the bundled demo tasks. Configure ANTHROPIC_API_KEY or OPENAI_API_KEY for real code generation."
+NO_SCRIPT = ("MOCK_PROVIDER_NO_SCRIPT: the offline MOCK provider is scripted and cannot solve arbitrary tasks. "
+             "It supports only the bundled demo tasks: 'users' (Pydantic User model, sample_project), 'summary' "
+             "(TaskStore.priority_summary, sample_project) and 'signup' (zod schema, ts_project) - pick them in "
+             "Coding Workspace > Demo task or run scripts/demo.sh a|b|3. For any other task configure a real provider: "
+             "ANTHROPIC_API_KEY or OPENAI_API_KEY plus VERICODE_CODER_MODEL in .env.")
 
 
 def _task_kind(prompt: str) -> str | None:

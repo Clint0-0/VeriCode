@@ -147,7 +147,9 @@ class TavilyClient:
                         record_search("search", query, "invalid_response", None, False)
                         return SearchOutcome(ok=False, status="invalid_response", query=query, detail=str(e)[:300])
                     credits = (data.get("usage") or {}).get("credits") if isinstance(data, dict) else None
-                    if isinstance(credits, (int, float)):
+                    if not isinstance(credits, (int, float)) or isinstance(credits, bool):
+                        credits = None
+                    if credits is not None:
                         self.credits += credits
                     out = SearchOutcome(ok=True, status="ok" if parsed.results else "no_results", query=query,
                                         results=parsed.results, retrieved_at=_now(), credits=credits)

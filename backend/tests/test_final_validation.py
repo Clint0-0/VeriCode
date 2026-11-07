@@ -36,6 +36,7 @@ def test_anthropic_streaming_collects_text_and_usage(monkeypatch):
             {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "Hel"}},
             {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "lo"}},
             {"type": "message_delta", "usage": {"output_tokens": 9}},
+            {"type": "message_stop"},
         ]), headers={"content-type": "text/event-stream"})
     r = llm.complete("s", "p", "coder", transport=httpx.MockTransport(h))
     assert seen["body"]["stream"] is True
@@ -51,7 +52,7 @@ def test_openai_streaming_requests_usage(monkeypatch):
 
     def h(req):
         seen["body"] = json.loads(req.content)
-        return httpx.Response(200, text=_sse([{"choices": [{"delta": {"content": "a"}}]}, {"choices": [{"delta": {"content": "b"}}]},
+        return httpx.Response(200, text=_sse([{"choices": [{"delta": {"content": "a"}}]}, {"choices": [{"delta": {"content": "b"}, "finish_reason": "stop"}]},
                                               {"choices": [], "usage": {"prompt_tokens": 50, "completion_tokens": 2}}]))
     r = llm.complete("s", "p", "repair", transport=httpx.MockTransport(h))
     assert seen["body"]["stream_options"] == {"include_usage": True}
@@ -63,7 +64,7 @@ def test_streaming_without_usage_is_labelled_estimated(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-00000000000000000000")
     monkeypatch.setattr(settings, "coder_model", "m")
     monkeypatch.setattr(settings, "openai_base_url", "http://gateway.local/v1")
-    r = llm.complete("s", "p", "coder", transport=httpx.MockTransport(lambda q: httpx.Response(200, text=_sse([{"choices": [{"delta": {"content": "x"}}]}]))))
+    r = llm.complete("s", "p", "coder", transport=httpx.MockTransport(lambda q: httpx.Response(200, text=_sse([{"choices": [{"delta": {"content": "x"}, "finish_reason": "stop"}]}]))))
     assert r.measurement == "ESTIMATED"
 
 
@@ -80,7 +81,7 @@ def test_streaming_rate_limit_then_success(monkeypatch):
             return httpx.Response(429, headers={"retry-after": "1"})
         return httpx.Response(200, text=_sse([{"type": "message_start", "message": {"usage": {"input_tokens": 3, "output_tokens": 0}}},
                                               {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "ok"}},
-                                              {"type": "message_delta", "usage": {"output_tokens": 1}}]))
+                                              {"type": "message_delta", "usage": {"output_tokens": 1}}, {"type": "message_stop"}]))
     r = llm.complete("s", "p", "coder", transport=httpx.MockTransport(h))
     assert r.text == "ok" and calls["n"] == 2
 
