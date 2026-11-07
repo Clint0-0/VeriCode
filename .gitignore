@@ -14,3 +14,4 @@ demos/_runs/
 *.db-wal
 .vericode_token
 tools/ts-checker/node_modules/
+reports/live/

@@ -10,6 +10,10 @@ on:
         description: "Paired benchmark runs (demo 3)"
         default: "3"
         required: true
+      skip_benchmark:
+        description: "Skip the paired benchmark inside the harness (demo 3 still runs)"
+        default: "true"
+        required: true
 
 permissions:
   contents: read
@@ -58,7 +62,19 @@ jobs:
           demos/sample_project/.venv/bin/pip install "pydantic==2.9.2" pytest
           npm ci --prefix tools/ts-checker --no-audit --no-fund
           npm ci --prefix demos/ts_project --no-audit --no-fund
+      - name: Live validation harness (Groq + Tavily, writes reports/live)
+        id: harness
+        working-directory: backend
+        run: ../.venv/bin/python -m vericode.live_validation --runs "${{ inputs.benchmark_runs }}" ${{ inputs.skip_benchmark == 'true' && '--skip-benchmark' || '' }}
+      - name: Upload live report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-report
+          path: reports/live/
+          if-no-files-found: warn
       - name: Live tests
+        if: always()
         run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs
       - name: Demo D (live stale-answer check)
         if: always()
