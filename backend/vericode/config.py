@@ -77,6 +77,7 @@ class Settings:
     # sandbox: auto (docker if daemon reachable, else process), docker, process
     sandbox_backend: str = field(default_factory=lambda: _env("VERICODE_SANDBOX", "auto"))
     sandbox_memory: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_MEMORY", "1g"))
+    sandbox_image: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_IMAGE", "vericode-sandbox:full"))
     sandbox_cpus: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_CPUS", "1"))
     # LLM evidence judge for claims without concrete values (only with a real provider)
     use_llm_judge: bool = field(default_factory=lambda: _env("VERICODE_LLM_JUDGE", "1") == "1")

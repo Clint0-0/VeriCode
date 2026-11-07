@@ -252,10 +252,9 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s", True, isolation)
 
 
-def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, Path]) -> CommandResult:
-    import uuid
-    name = f"vc-{uuid.uuid4().hex[:10]}"
-    for root, dirs, files in os.walk(cwd):  # let uid 65534 write into the disposable copy only
+def _prepare_writable(cwd: Path) -> None:
+    """Let uid 65534 write into the disposable workspace copy (and nothing else)."""
+    for root, dirs, files in os.walk(cwd):
         for d in dirs:
             p = Path(root) / d
             if not p.is_symlink():
@@ -265,11 +264,31 @@ def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, P
             if not p.is_symlink():
                 p.chmod(p.stat().st_mode | 0o666)
     cwd.chmod(0o777)
-    cmd = ["docker", "run", "--rm", "--name", name, "--network", "none",
+
+
+def self_contained_image() -> str | None:
+    """A locally available self-contained sandbox image (VERICODE_SANDBOX_IMAGE, built from docker/sandbox.Dockerfile).
+    When present, the host /usr is NOT mounted (portable to Docker Desktop on macOS/Windows)."""
+    img = settings.sandbox_image
+    if not img:
+        return None
+    try:
+        ok = subprocess.run(["docker", "image", "inspect", img], capture_output=True, timeout=10).returncode == 0
+    except Exception:
+        ok = False
+    return img if ok else None
+
+
+def docker_command(argv: list[str], cwd: Path, ro_mounts: dict[str, Path], name: str,
+                   image: str | None = None) -> tuple[list[str], list[str], str]:
+    """Build the `docker run` command. Returns (docker_args, inner_argv, isolation_label)."""
+    cmd = ["docker", "run", "--rm", "--name", name, "--network", "none", "--ipc", "private",
            "--memory", settings.sandbox_memory, "--memory-swap", settings.sandbox_memory, "--cpus", settings.sandbox_cpus,
-           "--pids-limit", "256", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-           "--user", "65534:65534", "--tmpfs", "/tmp:size=128m,mode=1777",
-           "-v", "/usr:/usr:ro", "-v", f"{cwd}:/work:rw"]
+           "--pids-limit", "256", "--ulimit", "nofile=1024:1024", "--read-only", "--cap-drop", "ALL",
+           "--security-opt", "no-new-privileges", "--user", "65534:65534", "--tmpfs", "/tmp:size=128m,mode=1777"]
+    if not image:
+        cmd += ["-v", "/usr:/usr:ro"]  # host-toolchain mode: empty local base image + host /usr read-only
+    cmd += ["-v", f"{cwd}:/work:rw"]
     for rel, host in ro_mounts.items():
         if host.exists():
             cmd += ["-v", f"{host.resolve()}:/work/{rel}:ro"]
@@ -281,24 +300,46 @@ def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, P
                     except OSError:
                         pass
     extra_path = ""
-    node = shutil.which("node")
-    if node:
-        node_root = Path(node).resolve().parents[1]
-        if not str(node_root).startswith("/usr"):
-            cmd += ["-v", f"{node_root}:{node_root}:ro"]  # node toolchain outside /usr (e.g. /opt/node22)
-            extra_path = f"{node_root}/bin:"
-    cmd += ["-w", "/work", "-e", "HOME=/tmp", "-e", "CI=1", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "LANG=C.UTF-8",
-            "-e", f"PATH=/work/.venv/bin:/work/node_modules/.bin:{extra_path}/usr/local/bin:/usr/bin:/bin", SANDBOX_IMAGE]
+    env = ["-e", "HOME=/tmp", "-e", "CI=1", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "LANG=C.UTF-8"]
     inner = list(argv)
-    if Path(inner[0]).name in ("python", "pytest") and ".venv" in ro_mounts:
-        inner[0] = f"/work/.venv/bin/{Path(inner[0]).name}"
+    if image:
+        # self-contained image: use the image's interpreter; the project's installed packages come from the
+        # read-only mounted venv's site-packages (same Python minor version required, see docs/SECURITY.md)
+        site = next((p for p in sorted((ro_mounts.get(".venv") or Path("/nonexistent")).glob("lib/python*/site-packages"))), None)
+        if site is not None:
+            env += ["-e", f"PYTHONPATH=/work/.venv/{site.relative_to(ro_mounts['.venv'])}"]
+        if Path(inner[0]).name in ("python", "pytest"):
+            inner = ["python3"] + (["-m", "pytest"] + inner[1:] if Path(inner[0]).name == "pytest" else inner[1:])
+        env += ["-e", "PATH=/work/node_modules/.bin:/usr/local/bin:/usr/bin:/bin"]
+        label = f"docker(self-contained image {image})"
+    else:
+        node = shutil.which("node")
+        if node:
+            node_root = Path(node).resolve().parents[1]
+            if not str(node_root).startswith("/usr"):
+                cmd += ["-v", f"{node_root}:{node_root}:ro"]  # node toolchain outside /usr (e.g. /opt/node22)
+                extra_path = f"{node_root}/bin:"
+        env += ["-e", f"PATH=/work/.venv/bin:/work/node_modules/.bin:{extra_path}/usr/local/bin:/usr/bin:/bin"]
+        if Path(inner[0]).name in ("python", "pytest") and ".venv" in ro_mounts:
+            inner[0] = f"/work/.venv/bin/{Path(inner[0]).name}"
+        label = "docker(host /usr read-only)"
+    cmd += ["-w", "/work"] + env + [image or SANDBOX_IMAGE]
     isolation = (f"docker: --network none, read-only rootfs, uid 65534, cap-drop ALL, memory {settings.sandbox_memory}, "
-                 f"cpus {settings.sandbox_cpus}, pids 256, only workspace copy writable")
+                 f"cpus {settings.sandbox_cpus}, pids 256, only workspace copy writable; {label}")
+    return cmd, inner, isolation
+
+
+def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, Path]) -> CommandResult:
+    import uuid
+    name = f"vc-{uuid.uuid4().hex[:10]}"
+    _prepare_writable(cwd)
+    cmd, inner, isolation = docker_command(argv, cwd, ro_mounts, name, self_contained_image())
     try:
         p = subprocess.run(cmd + inner, capture_output=True, text=True, timeout=timeout)
         return CommandResult(argv, p.returncode, redact(p.stdout[-20000:]), redact(p.stderr[-20000:]), False, isolation)
     except subprocess.TimeoutExpired as e:
         subprocess.run(["docker", "kill", name], capture_output=True)
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s (container killed)", True, isolation)
 
