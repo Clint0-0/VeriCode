@@ -89,6 +89,9 @@ class Settings:
     # network exposure / auth
     host: str = field(default_factory=lambda: _env("VERICODE_HOST", "127.0.0.1"))
     allow_remote: bool = field(default_factory=lambda: _env("VERICODE_ALLOW_REMOTE", "0") == "1")
+    # Optional, sent as `reasoning_effort` to OpenAI-compatible endpoints only when set (e.g. low|medium|high for
+    # reasoning models). Empty = parameter not sent.
+    reasoning_effort: str = field(default_factory=lambda: _env("VERICODE_REASONING_EFFORT", ""))
     llm_stream: bool = field(default_factory=lambda: _env("VERICODE_LLM_STREAM", "1") == "1")
     llm_timeout: float = field(default_factory=lambda: float(_env("VERICODE_LLM_TIMEOUT", "180")))
 

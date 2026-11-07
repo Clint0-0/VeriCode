@@ -41,6 +41,7 @@ class LLMResult:
     provider: str
     model: str
     stage: str
+    truncated: bool = False  # provider stopped at the output-token limit (finish_reason=length / max_tokens)
 
     @property
     def measurement(self) -> str:
@@ -118,6 +119,9 @@ def provider_status() -> dict:
             "coder_model": model_for("coder") if p != "mock" else "mock-scripted"}
 
 
+MAX_OUTPUT_BUDGET = 8192
+
+
 def complete(system: str, prompt: str, stage: str, task_id: str | None = None, max_tokens: int = 4000,
              ledger: list | None = None, transport: httpx.BaseTransport | None = None) -> LLMResult:
     provider = settings.effective_provider()
@@ -136,6 +140,19 @@ def complete(system: str, prompt: str, stage: str, task_id: str | None = None, m
         if not model:
             raise LLMUnavailable(f"No model configured for stage {stage}: set VERICODE_CODER_MODEL / VERICODE_PLANNER_MODEL")
         r = _call(provider, model, system, prompt, max_tokens, stage, transport)
+        if r.truncated and max_tokens < MAX_OUTPUT_BUDGET:
+            # Output hit the token limit (reasoning models spend part of it on hidden reasoning). The truncated call's
+            # tokens were really consumed: record them, then retry ONCE with a larger budget.
+            r.text = r.text or ""
+            record_usage(task_id, r)
+            if ledger is not None:
+                ledger.append(r)
+            r = _call(provider, model, system, prompt, min(max_tokens * 2, MAX_OUTPUT_BUDGET), stage, transport)
+        if r.truncated and not r.text.strip():
+            record_usage(task_id, r)
+            if ledger is not None:
+                ledger.append(r)
+            raise LLMUnavailable(f"{stage}: output token limit reached before any content was produced (finish_reason=length)")
     record_usage(task_id, r)
     if ledger is not None:
         ledger.append(r)
@@ -220,6 +237,7 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         req = client.build_request("POST", f"{settings.openai_base_url}/chat/completions",
                                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                                    json={"model": model, limit_key: max_tokens, "stream": True, "stream_options": {"include_usage": True},
+                                         **({"reasoning_effort": settings.reasoning_effort} if settings.reasoning_effort else {}),
                                          "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]})
     resp = client.send(req, stream=True)
     try:
@@ -228,7 +246,7 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         if resp.status_code >= 400:
             resp.read()
             raise LLMUnavailable(f"{provider} HTTP {resp.status_code}: {redact(resp.text[:400])}")
-        text, tin, tout, have_usage, complete = [], 0, 0, False, False
+        text, tin, tout, have_usage, complete, cut = [], 0, 0, False, False, False
         for ev in _sse_events(resp):
             if provider == "anthropic":
                 t = ev.get("type")
@@ -239,6 +257,7 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
                 elif t == "content_block_delta" and (ev.get("delta") or {}).get("type") == "text_delta":
                     text.append(ev["delta"].get("text", ""))
                 elif t == "message_delta":
+                    cut = cut or (ev.get("delta") or {}).get("stop_reason") == "max_tokens"
                     ot = (ev.get("usage") or {}).get("output_tokens")
                     if _valid_count(ot):
                         tout = ot
@@ -251,17 +270,18 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
                     text.append(((ch.get("delta") or {}).get("content")) or "")
                     if ch.get("finish_reason"):
                         complete = True
+                        cut = cut or ch.get("finish_reason") == "length"
                 usage = _openai_usage(ev.get("usage") or {}) if ev.get("usage") else None
                 if usage:
                     tin, tout, have_usage = usage[0], usage[1], True
         out = "".join(text)
         if not complete:
             raise LLMUnavailable(f"{provider}: incomplete stream (connection ended before the completion event); partial output discarded")
-        if not out.strip():
+        if not out.strip() and not cut:
             raise LLMUnavailable(f"{provider} returned empty content")
         if have_usage:
-            return LLMResult(out, tin, tout, False, provider, model, stage)
-        return LLMResult(out, estimate_tokens(system + prompt), estimate_tokens(out), True, provider, model, stage)
+            return LLMResult(out, tin, tout, False, provider, model, stage, cut)
+        return LLMResult(out, estimate_tokens(system + prompt), estimate_tokens(out), True, provider, model, stage, cut)
     finally:
         resp.close()
 
@@ -301,9 +321,10 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                     if not text.strip():
                         raise LLMUnavailable(f"Anthropic returned empty content (stop_reason={d.get('stop_reason')})")
                     usage = _anthropic_usage(d.get("usage") or {})
+                    cut = d.get("stop_reason") == "max_tokens"
                     if usage:
-                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage)
-                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
+                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage, cut)
+                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage, cut)
                 if provider == "openai":
                     if not settings.openai_api_key:
                         raise LLMUnavailable("OPENAI_API_KEY not set")
@@ -312,6 +333,7 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         f"{settings.openai_base_url}/chat/completions",
                         headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                         json={"model": model, limit_key: max_tokens,
+                              **({"reasoning_effort": settings.reasoning_effort} if settings.reasoning_effort else {}),
                               "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
                     )
                     if resp.status_code in (429, 500, 502, 503):
@@ -320,12 +342,13 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
                     d = resp.json()
                     text = d["choices"][0]["message"].get("content") or ""
-                    if not text.strip():
-                        raise LLMUnavailable(f"OpenAI returned empty content (finish_reason={d['choices'][0].get('finish_reason')})")
+                    finish = d["choices"][0].get("finish_reason")
+                    if not text.strip() and finish != "length":
+                        raise LLMUnavailable(f"OpenAI returned empty content (finish_reason={finish})")
                     usage = _openai_usage(d.get("usage") or {})
                     if usage:
-                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage)
-                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage)
+                        return LLMResult(text, usage[0], usage[1], False, provider, model, stage, finish == "length")
+                    return LLMResult(text, estimate_tokens(system + prompt), estimate_tokens(text), True, provider, model, stage, finish == "length")
                 raise LLMUnavailable(f"unknown provider {provider}")
         except (httpx.TransportError, httpx.HTTPStatusError) as e:
             last = e

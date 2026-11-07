@@ -21,6 +21,9 @@ def isolated_db(tmp_path, monkeypatch, request):
     monkeypatch.setattr(settings, "db_path", str(tmp_path / "test.db"))
     if "live" not in request.keywords:
         monkeypatch.setattr(settings, "llm_provider", "mock")
+        # a developer .env (e.g. Groq endpoint) must not leak into offline tests
+        monkeypatch.setattr(settings, "openai_base_url", "https://api.openai.com/v1")
+        monkeypatch.setattr(settings, "reasoning_effort", "")
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
