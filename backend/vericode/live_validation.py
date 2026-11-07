@@ -314,6 +314,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--skip-benchmark", action="store_true")
+    ap.add_argument("--only", default="", help="comma-separated section names to run (config always runs)")
     a = ap.parse_args()
     db.init_db()
     S: dict[str, dict] = {}
@@ -331,10 +332,13 @@ def main() -> int:
               ("coding_arbitrary_demoC", lambda: run_coding("sample_project", __import__("vericode.demo", fromlist=["x"]).ARBITRARY_TASK))]
     if not a.skip_benchmark:
         steps.append(("benchmark_actual", lambda: run_bench(a.runs)))
+    only = {x.strip() for x in a.only.split(",") if x.strip()}
+    if only:
+        steps = [(n, f) for n, f in steps if n in only]
     for name, fn in steps:
         S[name] = _section(fn) if real else {"status": BLOCKED, "error": "provider not configured"}
         print(f"{name:28s} {S[name]['status']:15s} {S[name].get('duration_s', '')}", flush=True)
-    S["api_screens"] = _section(check_api, S) if real else {"status": BLOCKED}
+    S["api_screens"] = _section(check_api, S) if real and (not only or "api_screens" in only) else {"status": BLOCKED if not real else "SKIPPED"}
     print(f"{'api_screens':28s} {S['api_screens']['status']}", flush=True)
     rep = {"generated_at": _now(), "config": S["config"], "sections": S}
     text = json.dumps(rep, indent=2, default=str)
@@ -346,6 +350,9 @@ def main() -> int:
     (OUT / "live_report.json").write_text(text)
     (OUT / "LIVE_REPORT.md").write_text(_md(rep))
     print(f"report: {OUT / 'LIVE_REPORT.md'}")
+    print("=====LIVE_REPORT_JSON_BEGIN=====")
+    print(json.dumps(rep, default=str))
+    print("=====LIVE_REPORT_JSON_END=====")
     critical = ["config", "groq_text", "groq_evidence_judge", "tavily"]
     return 0 if all(S[k]["status"] == OK for k in critical if k in S) else 1
 
