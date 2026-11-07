@@ -87,5 +87,6 @@ jobs:
         if: always()
         run: scripts/demo.sh c
       - name: Demo 3 (paired benchmark)
-        if: always()
+        # the harness already ran the same run_benchmark() when skip_benchmark=false; don't spend the quota twice
+        if: always() && inputs.skip_benchmark == 'true'
         run: scripts/demo.sh 3 --runs "${{ inputs.benchmark_runs }}"

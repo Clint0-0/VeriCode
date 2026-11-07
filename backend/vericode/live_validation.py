@@ -244,7 +244,7 @@ def run_coding(project: str, prompt: str, mode: str = "vericode") -> dict:
     return {"status": OK if r.get("success") else FAILED, "task_id": tid, "mode": mode, "outcome": r.get("outcome"),
             "first_pass": r.get("first_pass_success"), "repairs": r.get("repair_attempts"),
             "changed_files": r.get("changed_files"), "tests": tests, "tokens": r.get("tokens"),
-            "preflight_findings": [{k: f.get(k) for k in ("symbol", "status", "installed_version", "source", "suggestion")}
+            "preflight_findings": [{k: f.get(k) for k in ("planned_api", "status", "installed_version", "api_compatibility", "explanation")}
                                    for f in pf.get("findings", [])][:12],
             "api_corrections": r.get("api_corrections"), "diff": redact(r.get("diff") or "")[:6000],
             "error": redact(r.get("error") or "")[:600] or None, "duration_s_task": r.get("duration_s")}
