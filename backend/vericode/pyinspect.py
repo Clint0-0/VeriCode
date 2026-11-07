@@ -34,12 +34,21 @@ class SymbolInfo:
         return asdict(self)
 
 
-@lru_cache(maxsize=512)
-def _parse(path: str) -> ast.Module | None:
+@lru_cache(maxsize=1024)
+def _parse_cached(path: str, mtime_ns: int, size: int) -> ast.Module | None:
     try:
         return ast.parse(Path(path).read_text(errors="ignore"))
     except (SyntaxError, OSError):
         return None
+
+
+def _parse(path: str) -> ast.Module | None:
+    """AST cache keyed by (path, mtime, size): an upgraded/reinstalled package is re-parsed, never served stale."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    return _parse_cached(path, st.st_mtime_ns, st.st_size)
 
 
 def module_file(sp: Path, module: str) -> Path | None:

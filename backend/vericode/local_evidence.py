@@ -25,6 +25,8 @@ SYMBOL_PATTERNS = [
     re.compile(r"\b([A-Za-z_]\w*)\(\)"),                      # nonempty()
     re.compile(r"\b([A-Z][a-z]+[A-Z]\w*(?:\.\w+)?)\b"),        # CamelCase / ZodString.min
     re.compile(r"\b([a-z]+_[a-z_]+)\b"),                      # snake_case identifiers
+    re.compile(r"\b([a-z_]\w*\.[A-Za-z_]\w*)\b"),               # dotted member: vi.useFakeTimers
+    re.compile(r"\b([a-z]+[A-Z]\w*(?:\.\w+)?)\b"),            # lowerCamelCase: createProgram
     re.compile(r"\b(?:the\s+)?([A-Za-z_]\w*)\s+(?:decorator|function|method|class|helper|hook)\b"),  # "validator decorator"
     re.compile(r"\b(?:decorator|function|method|class)\s+([A-Za-z_]\w*)\b"),                         # "method dict"
 ]
@@ -32,13 +34,23 @@ _NOT_SYMBOLS = {"the", "this", "that", "a", "an", "new", "old", "main", "base", 
 
 
 def _import_name(dist_path: str | None, dist: str) -> str:
+    """Public import name of a distribution. Prefers the normalised dist name when such a module exists
+    (pytest ships `_pytest`, `py` and `pytest` in top_level.txt: the public one is `pytest`), then the first
+    non-private top-level module, then the normalised name."""
+    norm = dist.replace("-", "_").lower()
     if dist_path:
+        sp = Path(dist_path).parent
+        if (sp / norm).is_dir() or (sp / f"{norm}.py").is_file():
+            return norm
         tl = Path(dist_path) / "top_level.txt"
         if tl.exists():
-            first = tl.read_text().split()
-            if first:
-                return first[0]
-    return dist.replace("-", "_")
+            names = tl.read_text().split()
+            public = [n for n in names if not n.startswith("_")]
+            if public:
+                return public[0]
+            if names:
+                return names[0]
+    return norm
 
 
 def candidate_symbols(text: str) -> list[str]:
@@ -93,7 +105,7 @@ def check_claim(c: Claim, env: ProjectEnvironment) -> list[dict]:
                 outcome = "support" if (claims_removal or claims_deprecation) else "contradict"
                 reason = ("installed source confirms the API was removed/moved" if outcome == "support"
                           else "claim refers to an API that the installed version does not provide")
-            out.append({"title": f"Installed source: {dep.name} {dep.installed}", "url": f"installed://{dep.name}@{dep.installed}/{location or sym}",
+            out.append({"title": f"Installed source: {dep.name} {dep.installed} — {sym}", "url": f"installed://{dep.name}@{dep.installed}/{location or sym}",
                         "domain": f"{dep.name}@{dep.installed}", "source_type": "installed_package_source (version-specific)",
                         "authority": 1.0, "excerpt": excerpt[:600], "outcome": outcome, "reason": reason, "method": "installed_source",
                         "symbol": sym, "package": dep.name, "version": dep.installed})
