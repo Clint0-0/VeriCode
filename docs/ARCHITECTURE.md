@@ -29,7 +29,9 @@ frontend/ (React 19 + TS + Tailwind v4, Vite)  ──REST──►  backend/veri
 | H Coding agent | `agent.py` | SEARCH/REPLACE edit protocol; exact-single-match application; refuses blind overwrites; runs in `demos/_runs/<task>` copy; tests via allowlisted commands; bounded repairs; unified diff; `apply` endpoint with hash-based overwrite protection. |
 | I Project memory | `memory.py` | Rules only from high-confidence findings verified against installed source; version spec `==installed`; TTL 30 days; deactivated when installed version changes; export to `.agent-rules.md` inside a managed block (user content preserved). |
 | K Persistence | `db.py` | Tables: projects, tasks, token_usage, analyses, claims, evidence, rules, cache, benchmarks. Created idempotently on startup (no migration tool needed). |
-| M Benchmark | `benchmark.py` | See BENCHMARK.md. |
+| M Benchmark | `benchmark.py` | See BENCHMARK.md. Also reports flagged-API usage shipped by each mode. |
+| Combined workflow | `local_evidence.py` | Track 1 claims naming an installed package and an API symbol (`@decorator`, `Class.method()`, backticks, "X decorator") are resolved against installed code. Outcome rules: deprecated+recommended → contradict; deprecated+"deprecated" claim → support; exists+"removed" claim → contradict; missing (with migration message)+"exists" claim → contradict; unknown symbol → no evidence. |
+| Correction tracking | `agent.api_corrections` | Flagged usage patterns (call, decorator, import, rejected kwarg, exact TS call) are searched in the added lines of the final diff: `corrected` or `still_used`. |
 
 ## Scoring
 

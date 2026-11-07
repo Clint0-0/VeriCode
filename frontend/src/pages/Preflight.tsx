@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { FindingsList } from '../components/Findings'
+import { ConfidenceHeatmap } from '../components/Heatmap'
 import { TokenTable } from '../components/TaskReport'
 import { Badge, Button, Card, Empty, ErrorBox, Field, inputCls, Mono, Spinner, useApi } from '../components/ui'
 
@@ -80,6 +81,10 @@ export default function Preflight(_: { param?: string }) {
               <div className="mb-1 text-xs font-medium text-slate-400">Planned API skeleton (validated JSON)</div>
               <Mono className="max-h-64">{JSON.stringify(res.skeleton, null, 2)}</Mono>
               {res.skeleton_errors?.length > 0 && <div className="mt-1 text-xs text-amber-300">Schema corrections: {res.skeleton_errors.join(' | ')}</div>}
+            </div>
+            <div>
+              <div className="mb-1 text-xs font-medium text-slate-400">Confidence heatmap</div>
+              <ConfidenceHeatmap findings={res.findings} />
             </div>
             <FindingsList findings={res.findings} />
             <div>

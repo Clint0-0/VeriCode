@@ -32,11 +32,22 @@ scripts/setup.sh        # venvs, demo projects (pydantic 2.9.2, zod 3.23.8), Typ
 $EDITOR .env            # TAVILY_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY, VERICODE_CODER_MODEL (+ optional VERICODE_PLANNER_MODEL)
 scripts/run.sh          # http://127.0.0.1:8000 — open the login URL it prints (token also in .vericode_token)
 scripts/test.sh         # backend + frontend tests
-scripts/demo.sh all     # Demo 1 (Python), 1b (TypeScript), 2 (stale answers), 3 (benchmark)
+scripts/demo.sh all     # A Python compat · B TypeScript compat · D stale answer · E combined · C arbitrary task · 3 benchmark
 ```
 
 If the Docker daemon is running, test commands execute in a container. Otherwise they run in the labelled
 process sandbox (`VERICODE_SANDBOX=auto|docker|process`).
+
+## The two problem statements and why they are combined
+
+The official problem-statement documents were **not available** in the workspace, so this README doesn't quote
+them. Our selection, in our own words:
+- **Track 1, PS1:** detect stale or incorrect information in LLM answers and verify it against evidence.
+- **Track 2, PS1:** stop AI coding agents from using APIs that don't match the installed dependencies, while using fewer tokens.
+
+Both are the same failure: a model trusting outdated knowledge. VeriCode applies one principle to both,
+**verify before you trust or generate**, and shares the machinery. The installed-package verifiers built for
+Track 2 also act as *version-specific evidence* for Track 1 claims about libraries (Demo E, "combined workflow").
 
 ## Status — what is implemented, tested, live-tested, mocked
 
@@ -54,7 +65,22 @@ process sandbox (`VERICODE_SANDBOX=auto|docker|process`).
 | Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes run inside the container) |
 | Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
 | Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
-| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes | Implemented and tested. **All recorded numbers are MOCK** |
+| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. **All recorded numbers are MOCK** |
+| Combined workflow: Track 1 API claims checked against installed packages (Python AST / TS compiler) | Implemented and tested (real pydantic 2.9.2 / zod 3.23.8) |
+| Confidence heatmap (per library × planned API, colours = verification status, plus "auto-corrected" from the final diff) | Implemented and tested (UI + e2e) |
+| Provider streaming (Anthropic SSE, OpenAI `stream_options.include_usage`) for coder/repair, with usage from stream events | Implemented; mocked-HTTP tests only, **not live-tested** |
+| Per-model cost (user-entered prices; never invented, never for MOCK) | Implemented and tested |
+| Browser end-to-end tests (real server + Chromium): login, Track 1, combined, pre-flight heatmap, coding task, all 8 screens, mobile | Implemented and passing |
+
+## Blockers for full live validation (require user action)
+
+| Blocker | Action |
+|---|---|
+| No `TAVILY_API_KEY`; `api.tavily.com` refused by this build environment's egress proxy | Add the key to `.env`, run where Tavily is reachable (or allow the domain), then `VERICODE_LIVE_TESTS=1 .venv/bin/python -m pytest backend/tests -m live` |
+| No LLM key (`api.openai.com` also blocked here; `api.anthropic.com` reachable) | Set `ANTHROPIC_API_KEY` (or OpenAI) + `VERICODE_CODER_MODEL`, then `scripts/demo.sh c` and `scripts/demo.sh 3 --runs 3` |
+
+Until then, **these Definition-of-Done items are not met:** real Tavily retrieval, a real LLM provider, real
+evidence judging, an arbitrary task run on a real model, and actual-token benchmark results.
 
 ## Measured results (honest)
 

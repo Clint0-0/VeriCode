@@ -70,6 +70,17 @@ export default function Tokens(_: { param?: string }) {
         <Stat label="Verification / documentation model tokens" value={fmt.n(['claim_extraction', 'claim_judge'].reduce((n, k) => n + (stage(k) ? stage(k).input + stage(k).output : 0), 0))} sub="API checks, claim extraction and evidence comparison are deterministic (no LLM)" />
       </div>
 
+      {d.by_model?.length > 0 && (
+        <Card title="Usage and cost by model">
+          <table className="w-full text-xs">
+            <thead className="text-left text-slate-500"><tr><th className="py-1">Provider / model</th><th>Measurement</th><th>Input</th><th>Output</th><th>Calls</th><th>Cost (USD)</th><th>Cost basis</th></tr></thead>
+            <tbody>{d.by_model.map((m: any, i: number) => (
+              <tr key={i} className="border-t border-ink-700"><td className="py-1 font-mono">{m.provider} / {m.model}</td><td><Badge tone={MEASUREMENT_TONE[m.measurement] ?? 'gray'}>{m.measurement || '—'}</Badge></td><td className="tabular-nums">{fmt.n(m.input)}</td><td className="tabular-nums">{fmt.n(m.output)}</td><td>{m.calls}</td><td className="tabular-nums">{m.cost_usd == null ? '—' : `$${m.cost_usd}`}</td><td className="text-slate-500">{m.cost_basis}</td></tr>
+            ))}</tbody>
+          </table>
+        </Card>
+      )}
+
       <Card title="Benchmark: baseline vs VeriCode (identical tasks, model, repo state, tests, repair budget)" actions={<>
         <select aria-label="Measurement" className="rounded border border-ink-600 bg-ink-950 px-2 py-1 text-sm" value={kind} onChange={(e) => setKind(e.target.value as any)}>
           <option value="ACTUAL_PROVIDER_USAGE">Real provider results</option>
@@ -105,6 +116,7 @@ export default function Tokens(_: { param?: string }) {
                         ['Input / output tokens', `${fmt.n(B.input_tokens.mean)} / ${fmt.n(B.output_tokens.mean)}`, `${fmt.n(V.input_tokens.mean)} / ${fmt.n(V.output_tokens.mean)}`],
                         ['Verification overhead tokens (planner/judge)', fmt.n(B.verification_overhead_tokens?.mean ?? 0), fmt.n(V.verification_overhead_tokens?.mean ?? 0)],
                         ['Paired-run savings', '', (tk.paired_run_savings_pct ?? []).map((x: number) => `${x}%`).join(', ') || '—'],
+                        ['Flagged (deprecated/incompatible) APIs shipped in final code', (tk.flagged_api_usage ?? []).map((x: any) => x.baseline_flagged_apis_used).join(', ') || '—', (tk.flagged_api_usage ?? []).map((x: any) => x.vericode_flagged_apis_used).join(', ') || '—'],
                         ['LLM calls', B.llm_calls.mean, V.llm_calls.mean],
                         ['Repair attempts', B.repair_attempts.mean, V.repair_attempts.mean],
                         ['Search calls (Tavily)', B.search_calls.mean, V.search_calls.mean],

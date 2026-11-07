@@ -38,6 +38,11 @@ API scripts can send `Authorization: Bearer <token>`.
 
 **Sandbox test matrix:** `VERICODE_TEST_SANDBOX=docker scripts/test.sh` runs every agent test inside containers.
 
+**Browser e2e tests:** `.venv/bin/python -m pytest backend/tests/test_e2e_ui.py`. These start a real uvicorn
+server with a temp DB and drive Chromium through login, Track 1, the combined workflow, the pre-flight heatmap,
+a coding task, all 8 screens and the mobile layout. Requires `backend/requirements-dev.txt` (Playwright), a system
+Chrome/Chromium and a built frontend. Skipped otherwise.
+
 **Tests:** `scripts/test.sh`
 - backend: `.venv/bin/python -m pytest -q backend/tests` (dependency, API-verification, Tavily, stale-answer, agent,
   token, security, memory and API-contract tests; the demo-project tests need `demos/sample_project/.venv`)

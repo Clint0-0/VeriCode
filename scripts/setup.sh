@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 -m venv .venv
-.venv/bin/pip install -q -r backend/requirements.txt
+.venv/bin/pip install -q -r backend/requirements-dev.txt
 python3 -m venv demos/sample_project/.venv
 demos/sample_project/.venv/bin/pip install -q "pydantic==2.9.2" pytest
 (cd tools/ts-checker && npm ci --no-audit --no-fund)       # VeriCode's pinned TypeScript (compiler API)

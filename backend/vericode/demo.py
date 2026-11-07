@@ -84,13 +84,64 @@ def demo3(runs: int) -> None:
             print(f"  detection rate {t['detection']['detection_rate']}, false-positive rate {t['detection']['false_positive_rate']}")
 
 
+ARBITRARY_TASK = ("Add a method due_within(self, now, days) to TaskStore in taskboard/storage.py that returns open tasks whose due "
+                  "date falls within the next `days` days (inclusive), sorted by due date, and add pytest tests for it in tests/test_due_within.py.")
+
+
+def demoC() -> None:
+    """Arbitrary (non-bundled) coding task. Needs a real LLM provider; the MOCK provider refuses it explicitly."""
+    from .llm import LLMUnavailable, provider_status
+    ps = provider_status()
+    project = (ROOT / "demos" / "sample_project").resolve()
+    print(f"task: {ARBITRARY_TASK}\nprovider: {ps['provider']} (real={ps['real']}, ready={ps['ready']})")
+    if not (ps["real"] and ps["ready"]):
+        print("BLOCKED: an arbitrary task needs a real LLM provider. Set ANTHROPIC_API_KEY or OPENAI_API_KEY and VERICODE_CODER_MODEL.")
+        try:
+            r = TaskRunner(create_task(project, ARBITRARY_TASK, "vericode"), project, ARBITRARY_TASK, "vericode").run()
+            print(f"mock attempt -> outcome={r.get('outcome')} error={r.get('error')}")
+        except LLMUnavailable as e:
+            print(f"mock attempt -> {e}")
+        return
+    for mode in ("baseline", "vericode"):
+        r = TaskRunner(create_task(project, ARBITRARY_TASK, mode), project, ARBITRARY_TASK, mode).run()
+        print(f"{mode}: outcome={r.get('outcome')} first_pass={r.get('first_pass_success')} repairs={r.get('repair_attempts')} "
+              f"tokens={r['tokens']['total']} ({r['tokens']['measurement']}) files={r.get('changed_files')}")
+        if r.get("error"):
+            print("  error:", r["error"])
+
+
+def demoE() -> None:
+    """Combined workflow: an LLM answer about a library is verified (Track 1) against the INSTALLED package, and the
+    same knowledge drives the pre-flight briefing for code generation (Track 2)."""
+    answer = ("To validate fields in Pydantic, use the @validator decorator. Pydantic provides BaseModel.model_dump() for "
+              "serialization. You can import the pydantic BaseSettings class directly from pydantic.")
+    res = stale.analyze(answer, mode="fixture", workspace="sample_project")
+    print("Track 1 - answer about pydantic checked against demos/sample_project (pydantic 2.9.2 installed):")
+    for c in res["claims"]:
+        ev = next((e for e in c["evidence"] if e["origin"] == "installed_source"), None)
+        print(f"  [{c['status']}] {c['claim']['claim']}")
+        if ev:
+            print(f"      installed_source: {ev['excerpt'][:150]}")
+    print("\nTrack 2 - the same APIs in a coding task are caught before generation:")
+    demo1("users")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("demo", choices=["1", "1b", "2", "3", "all"])
+    ap.add_argument("demo", choices=["1", "1b", "2", "3", "a", "b", "c", "d", "e", "all"])
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--runs", type=int, default=1)
     a = ap.parse_args()
     db.init_db()
+    a.demo = {"a": "1", "b": "1b", "d": "2"}.get(a.demo, a.demo)
+    if a.demo == "c":
+        print("#" * 20, "DEMO C - ARBITRARY CODING TASK", "#" * 20)
+        demoC()
+        return
+    if a.demo == "e":
+        print("#" * 20, "DEMO E - COMBINED WORKFLOW", "#" * 20)
+        demoE()
+        return
     if a.demo in ("1", "all"):
         print("#" * 20, "DEMO 1 - PRE-FLIGHT API DETECTION", "#" * 20)
         demo1()
@@ -100,6 +151,11 @@ def main() -> None:
     if a.demo in ("2", "all"):
         print("\n" + "#" * 20, "DEMO 2 - STALE-ANSWER DETECTION", "#" * 20)
         demo2(a.live)
+    if a.demo == "all":
+        print("\n" + "#" * 20, "DEMO E - COMBINED WORKFLOW", "#" * 20)
+        demoE()
+        print("\n" + "#" * 20, "DEMO C - ARBITRARY CODING TASK", "#" * 20)
+        demoC()
     if a.demo in ("3", "all"):
         print("\n" + "#" * 20, "DEMO 3 - TOKEN-EFFICIENT AGENT vs BASELINE", "#" * 20)
         demo3(a.runs)

@@ -26,6 +26,10 @@ if used) with input and output separated. Provider-reported usage is used when t
 **Aggregates:** per-task mean ± sd (min/max, n), per-run paired savings, verification-overhead tokens (planner and
 judge stages), and the average savings across comparable tasks with its spread.
 
+**Quality signal:** for each paired run, the APIs VeriCode's pre-flight flagged are searched in each mode's final
+diff (`flagged_api_usage`). A baseline can "succeed" while shipping deprecated APIs that tests don't catch; this
+metric makes that visible.
+
 **Also reported:** final and first-pass success rates, repair attempts, LLM calls, search calls, duration
 (mean ± sd, min/max, n), tokens by stage, and API-incompatibility detection rate / false-positive rate against
 `expected_findings` in `demos/tasks/catalog.json`.

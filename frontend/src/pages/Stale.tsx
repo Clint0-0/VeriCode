@@ -46,7 +46,8 @@ function EvidenceItem({ e }: { e: any }) {
         <Badge tone={e.outcome === 'support' ? 'green' : e.outcome === 'contradict' ? 'red' : 'gray'}>{e.outcome}</Badge>
         {e.method && e.method !== 'none' && <Badge tone="blue">{e.method}</Badge>}
         <Badge tone={e.origin?.startsWith('fixture') ? 'amber' : 'blue'}>{e.origin}</Badge>
-        <a className="text-sky-300 hover:underline" href={e.url} target="_blank" rel="noreferrer noopener">{e.title || e.url}</a>
+        {e.url?.startsWith('installed://') ? <span className="font-mono text-emerald-200" title={e.url}>{e.title}</span>
+          : <a className="text-sky-300 hover:underline" href={e.url} target="_blank" rel="noreferrer noopener">{e.title || e.url}</a>}
         <span className="text-slate-500">{e.domain} · {e.source_type} · authority {e.authority}</span>
       </div>
       <div className="mt-1 text-slate-500">published/updated: <b className="text-slate-400">{e.published_date ?? 'unknown'}</b> · retrieved: {e.retrieved_at}{e.freshness != null ? ` · freshness ${e.freshness}` : ' · freshness unknown'}</div>
@@ -135,6 +136,9 @@ export default function Stale({ param }: { param?: string }) {
   const [domains, setDomains] = useState('')
   const [mode, setMode] = useState<'live' | 'fixture'>('live')
   const [llmExtract, setLlmExtract] = useState(false)
+  const [workspace, setWorkspace] = useState('')
+  const [workspaces, setWorkspaces] = useState<any[]>([])
+  useEffect(() => { api<any[]>('/workspaces').then(setWorkspaces).catch(() => setWorkspaces([])) }, [])
   const [res, setRes] = useState<any>(null)
   const [corr, setCorr] = useState<any>(null)
   const [err, setErr] = useState<unknown>(null)
@@ -153,7 +157,7 @@ export default function Stale({ param }: { param?: string }) {
     setBusy(true); setErr(null); setRes(null); setCorr(null)
     try {
       const split = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean)
-      setRes(await api('/stale/analyze', { body: { answer, question: question || null, urls: split(urls), preferred_domains: split(domains), mode, llm_extraction: llmExtract }, timeoutMs: 300_000 }))
+      setRes(await api('/stale/analyze', { body: { answer, question: question || null, urls: split(urls), preferred_domains: split(domains), mode, llm_extraction: llmExtract, workspace: workspace || null }, timeoutMs: 300_000 }))
     } catch (e) { setErr(e) } finally { setBusy(false) }
   }
   const correct = async () => {
@@ -179,6 +183,11 @@ export default function Stale({ param }: { param?: string }) {
             <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'live'} onChange={() => setMode('live')} /> Live (Tavily)</label>
             <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'fixture'} onChange={() => setMode('fixture')} /> Offline fixture (labelled, reproducible)</label>
             <label className="flex items-center gap-1.5" title="Uses the planner model; requires a real LLM provider"><input type="checkbox" checked={llmExtract} onChange={(e) => setLlmExtract(e.target.checked)} /> LLM claim extraction</label>
+            <label className="flex items-center gap-1.5" title="Check claims about libraries against the packages installed in this workspace (combined workflow)">Check API claims against installed packages of
+              <select aria-label="Installed packages workspace" className="rounded border border-ink-600 bg-ink-950 px-1.5 py-0.5 text-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+                <option value="">— none —</option>{workspaces.map((w) => <option key={w.name} value={w.name}>{w.name}</option>)}
+              </select>
+            </label>
           </div>
           <Button onClick={analyze} disabled={busy || answer.length < 10}>{busy ? 'Verifying…' : 'Extract & verify claims'}</Button>
         </div>
@@ -187,6 +196,7 @@ export default function Stale({ param }: { param?: string }) {
       {busy && <Spinner label="Extracting claims and retrieving evidence…" />}
       {res && (
         <>
+          {s.workspace && <Notice tone="blue">API claims were also checked against the packages installed in <b>{s.workspace}</b> (evidence labelled <span className="font-mono">installed_source</span>; it describes the installed version, not necessarily the latest release).</Notice>}
           {s.evidence_mode === 'fixture' && <Notice>Evidence below comes from the <b>offline fixture</b> (demos/stale_fixtures), not live retrieval.</Notice>}
           {s.evidence_mode === 'live_tavily' && !s.tavily_configured && <Notice>TAVILY_API_KEY is not set — live verification was not performed, so volatile claims are reported as UNVERIFIED.</Notice>}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">

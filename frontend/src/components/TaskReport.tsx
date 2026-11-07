@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api, fmt } from '../api'
 import { FindingsList, KV } from './Findings'
+import { ConfidenceHeatmap, CorrectionsList } from './Heatmap'
 import { Badge, Button, Card, Diff, Empty, ErrorBox, Mono, Notice } from './ui'
 
 export function TokenTable({ tokens }: { tokens: any }) {
@@ -71,7 +72,9 @@ export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => v
             <KV k="Tavily calls" v={`${pf.tavily_calls ?? 0}${pf.tavily_configured ? '' : ' (no key: live verification not performed)'}`} />
             <KV k="Rules saved to memory" v={pf.rules_saved?.length ?? 0} />
           </div>
+          <div className="mb-3"><ConfidenceHeatmap findings={pf.findings} corrections={res.api_corrections} /></div>
           <FindingsList findings={pf.findings} />
+          {res.api_corrections?.length > 0 && <><div className="mt-3 text-xs font-medium text-slate-400">Flagged APIs in the generated code</div><CorrectionsList corrections={res.api_corrections} /></>}
           <div className="mt-3 text-xs font-medium text-slate-400">Briefing injected into the coder prompt</div>
           <Mono className="mt-1">{pf.briefing}</Mono>
         </Card>

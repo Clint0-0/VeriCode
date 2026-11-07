@@ -127,3 +127,41 @@ test('coding workspace surfaces missing-credential errors from the API', async (
   await userEvent.click(screen.getByRole('button', { name: 'Run task' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(/No LLM provider configured.*Configure an LLM provider/)
 })
+
+test('pre-flight shows the confidence heatmap with real statuses', async () => {
+  const findings = [
+    { package: 'pydantic', installed_version: '2.9.2', planned_api: 'pydantic.Field', status: 'INCOMPATIBLE', risk_score: 70, verification_confidence: 'high', explanation: 'regex rejected', arguments: ['regex'], verification_method: ['static_ast'], risk_factors: [], argument_checks: [] },
+    { package: 'pydantic', installed_version: '2.9.2', planned_api: 'pydantic.BaseModel', status: 'VERIFIED_LOCAL', risk_score: 0, verification_confidence: 'high', explanation: 'found', arguments: [], verification_method: ['static_ast'], risk_factors: [], argument_checks: [] },
+  ]
+  stubFetch((url, init) => {
+    if (url.endsWith('/api/preflight')) return { body: { skeleton: { packages: [] }, skeleton_errors: [], findings, briefing: 'PRE-FLIGHT BRIEFING', tokens: { by_stage: {}, input: 1, output: 1, total: 2, calls: 1, estimated: true, measurement: 'MOCK' } } }
+    return base(url, init)
+  })
+  window.location.hash = 'preflight'
+  render(<App />)
+  await userEvent.type(await screen.findByLabelText('Task'), 'add a user model')
+  await userEvent.click(screen.getByRole('button', { name: 'Run pre-flight' }))
+  const table = await screen.findByRole('table', { name: 'API confidence heatmap' })
+  expect(table).toHaveTextContent('INCOMPATIBLE')
+  expect(table).toHaveTextContent('VERIFIED_LOCAL')
+  expect(screen.getByText('INCOMPATIBLE · 1')).toBeInTheDocument()
+})
+
+test('settings save sends persisted fields with CSRF and shows confirmation', async () => {
+  let body: any = null
+  const settingsBody = { llm_provider: 'mock', planner_model: '', coder_model: '', max_repair_attempts: 3, command_timeout: 120, cache_ttl_seconds: 86400, tavily_timeout: 20, tavily_max_retries: 2, cost_input_per_mtok: 3, cost_output_per_mtok: 15, half_lives: { pricing: 60 }, sandbox_backend: 'auto', use_llm_judge: true, tavily_search_depth: 'basic', default_workspace: 'sample_project', authority_rules: { pricing: [] }, model_prices: {}, llm_stream: true, workspaces_root: '/x', tavily_configured: false, anthropic_configured: false, openai_configured: false, integrations }
+  stubFetch((url, init) => {
+    if (url.endsWith('/api/settings') && init?.method === 'PUT') { body = JSON.parse(String(init.body)); return { body: settingsBody } }
+    if (url.endsWith('/api/settings')) return { body: settingsBody }
+    if (url.endsWith('/api/rules')) return { body: [] }
+    return base(url, init)
+  })
+  window.location.hash = 'settings'
+  render(<App />)
+  const sel = await screen.findByLabelText('Execution sandbox')
+  await userEvent.selectOptions(sel, 'docker')
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(await screen.findByText(/persist across restarts/)).toBeInTheDocument()
+  expect(body.sandbox_backend).toBe('docker')
+  expect(body.authority_rules).toEqual({ pricing: [] })
+})

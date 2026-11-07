@@ -1,5 +1,27 @@
 # Hackathon demo guide
 
+CLI aliases: `scripts/demo.sh a` (Python compat) · `b` (TypeScript compat) · `c` (arbitrary task; needs a real LLM)
+· `d` (stale answer) · `e` (combined workflow) · `3` (benchmark) · `all`.
+
+## Demo E — Combined workflow (Track 1 × Track 2)
+1. **Stale-Answer Detector** → paste "To validate fields in Pydantic, use the @validator decorator. Pydantic provides
+   BaseModel.model_dump() for serialization. You can import the pydantic BaseSettings class directly from pydantic."
+2. Under "Check API claims against installed packages of", choose `sample_project`, then run.
+3. Results:
+   - Claim 1 is **CONTRADICTED**: the installed source marks `validator` deprecated (`class_validators.py:82`).
+   - Claim 2 is **CURRENT_SUPPORTED** (`main.py:352`).
+   - Claim 3 is **CONTRADICTED**: pydantic's own migration message says BaseSettings moved to `pydantic-settings`.
+
+   All three show evidence labelled `installed_source`.
+4. Run Demo A: the same APIs are flagged by the pre-flight check and corrected before code generation. The heatmap
+   shows `auto-corrected 3/3`.
+
+## Demo C — Arbitrary coding task (real model required)
+`scripts/demo.sh c`, or paste any task in the Coding Workspace (e.g. "Add a method due_within(self, now, days) to
+TaskStore … and add pytest tests"). With a real provider, both modes run with provider-reported usage. With MOCK,
+the run fails explicitly (`MOCK_PROVIDER_NO_SCRIPT`). The mock never fakes an arbitrary task.
+
+
 Start: `scripts/run.sh` → open the printed login URL (`http://127.0.0.1:8000/?token=…`). Each demo can also be run headless with `scripts/demo.sh N`.
 
 ## Demo 1 — Pre-flight API detection

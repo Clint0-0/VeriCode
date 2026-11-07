@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.0 — final validation (`feat/vericode-final-validation`)
+- **Combined workflow** (`local_evidence.py`, Demo E): Track 1 claims about libraries installed in a selected
+  workspace are checked against the installed source. Python uses the AST resolver; TypeScript uses the compiler API.
+  The checks cover existence, deprecation and package migration messages, and distinguish "deprecated" claims
+  from "removed" claims. Evidence is labelled `installed_source` and is version-specific. It can flag a claim but
+  never rewrites it.
+- **Auto-correction tracking:** after a VeriCode run, every flagged API is checked against the added lines of the
+  final diff and reported as `corrected` or `still_used`. Benchmarks also report how many flagged APIs the
+  baseline shipped. In the TS demo the baseline ships the deprecated `nonempty()`.
+- **Confidence heatmap** in the Pre-Flight Inspector and task reports: rows are libraries, cells are planned APIs, coloured by status, with correction outcomes.
+- **Streaming** for coder/repair calls: Anthropic SSE (`message_start` / `message_delta` usage) and OpenAI
+  (`stream_options.include_usage`). Missing stream usage is labelled ESTIMATED. Toggle: `VERICODE_LLM_STREAM`.
+- **Per-model pricing** (`model_prices` setting). Analytics show cost per provider/model with the cost basis. MOCK is never priced.
+- Demo CLI: `a`/`b`/`c`/`d`/`e` aliases.
+  - Demo C runs a non-bundled task. It needs a real provider; with MOCK it reports the blocker explicitly.
+  - Demo E shows the combined workflow.
+- **Fix:** a NUL byte in a workspace path raised an unhandled `ValueError` (HTTP 500). It now raises `SecurityError` (400).
+- **Tests:**
+  - Backend 91 → 114, plus 6 browser e2e (real uvicorn + Chromium).
+  - Frontend 6 → 8.
+  - New security tests: symlink escapes, command-injection argv, workspace path attacks, a docker host-file
+    isolation probe, and a fork bomb contained by the pids limit.
+
 ## 2.0.0 — completion phase (`feat/vericode-completion`)
 
 ### Track 1 — stale-answer detection
@@ -84,7 +107,7 @@
 - Responsive sidebar.
 
 ### Tests
-- Backend: 57 → 91 passing, plus 2 opt-in live tests (skipped without credentials). Frontend: 5 → 6.
+- Backend: 57 → 91 passing (2.0.0), plus 2 opt-in live tests (skipped without credentials). Frontend: 5 → 6.
 
 ## 1.0.0 — initial build (`feat/vericode-main`)
 First end-to-end implementation: see git history.

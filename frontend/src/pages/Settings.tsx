@@ -16,7 +16,8 @@ export default function Settings(_: { param?: string }) {
     setErr(null); setMsg(null)
     try {
       const body: any = {}
-      for (const k of ['llm_provider', 'planner_model', 'coder_model', 'max_repair_attempts', 'command_timeout', 'cache_ttl_seconds', 'tavily_timeout', 'tavily_max_retries', 'cost_input_per_mtok', 'cost_output_per_mtok', 'half_lives', 'sandbox_backend', 'use_llm_judge', 'tavily_search_depth', 'default_workspace']) body[k] = form[k]
+      for (const k of ['llm_provider', 'planner_model', 'coder_model', 'max_repair_attempts', 'command_timeout', 'cache_ttl_seconds', 'tavily_timeout', 'tavily_max_retries', 'cost_input_per_mtok', 'cost_output_per_mtok', 'half_lives', 'sandbox_backend', 'use_llm_judge', 'tavily_search_depth', 'default_workspace', 'llm_stream']) body[k] = form[k]
+      try { body.model_prices = typeof form.model_prices === 'string' ? JSON.parse(form.model_prices || '{}') : form.model_prices } catch { throw new Error('Model prices must be JSON: {"model-id": {"input": 3, "output": 15}}') }
       body.authority_rules = Object.fromEntries(Object.entries(form.authority_rules ?? {}).map(([k, v]: any) => [k, Array.isArray(v) ? v : String(v).split(',').map((x) => x.trim()).filter(Boolean)]))
       s.setData(await api('/settings', { method: 'PUT', body }))
       setMsg('Saved to the local database — settings persist across restarts.')
@@ -69,6 +70,10 @@ export default function Settings(_: { param?: string }) {
             </select>
           </Field>
           <Field label="Default workspace">{txt('default_workspace')}</Field>
+          <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={!!form.llm_stream} onChange={(e) => setForm({ ...form, llm_stream: e.target.checked })} /> Stream coder/repair responses (usage from stream events)</label>
+          <Field label="Per-model prices (USD per 1M tokens, JSON)" hint='{"model-id": {"input": 3, "output": 15}} — used for cost; no prices are assumed'>
+            <input aria-label="Model prices" className={`${inputCls} font-mono`} value={typeof form.model_prices === 'string' ? form.model_prices : JSON.stringify(form.model_prices ?? {})} onChange={(e) => setForm({ ...form, model_prices: e.target.value })} />
+          </Field>
           <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={!!form.use_llm_judge} onChange={(e) => setForm({ ...form, use_llm_judge: e.target.checked })} /> LLM evidence judge for claims without concrete values (real provider only)</label>
         </div>
         <div className="mt-4 text-xs font-medium text-slate-400">Freshness half-lives (days) — Freshness = 100 × 2^(−age / half-life)</div>
