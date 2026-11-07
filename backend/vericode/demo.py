@@ -44,6 +44,7 @@ def demo1(task_id: str = "users") -> None:
     print(r.get("diff", r.get("error")))
     for c in r.get("checks", {}).get("results", []):
         print(f"  {c['command']} -> exit {c['returncode']}  ({c['isolation']})\n  {c['stdout'].strip().splitlines()[-1] if c['stdout'].strip() else ''}")
+    return r
 
 
 def demo2(live: bool) -> None:
@@ -66,6 +67,7 @@ def demo2(live: bool) -> None:
     print("\nCorrected answer:\n  " + corr["corrected"])
     for ci in corr["citations"]:
         print(f"  [{ci['n']}] {ci['url']} ({ci['origin']})")
+    return res
 
 
 def demo3(runs: int) -> None:
@@ -82,6 +84,7 @@ def demo3(runs: int) -> None:
         print(f"  verification overhead (vericode): {v['verification_overhead_tokens']['mean']} tokens")
         if t["detection"]["detection_rate"] is not None:
             print(f"  detection rate {t['detection']['detection_rate']}, false-positive rate {t['detection']['false_positive_rate']}")
+    return res
 
 
 ARBITRARY_TASK = ("Add a method due_within(self, now, days) to TaskStore in taskboard/storage.py that returns open tasks whose due "
@@ -123,17 +126,57 @@ def demoE() -> None:
         if ev:
             print(f"      installed_source: {ev['excerpt'][:150]}")
     print("\nTrack 2 - the same APIs in a coding task are caught before generation:")
-    demo1("users")
+    r = demo1("users")
+    return res, r
+
+
+def offline_suite(runs: int = 1) -> None:
+    """Every demo that works without credentials. Labels: MOCK (scripted coder), ESTIMATED tokens, FIXTURE evidence,
+    installed_source evidence. Nothing here is a live result."""
+    from .config import settings as s
+    s.llm_provider = "mock"
+    print("=" * 78)
+    print("VeriCode OFFLINE demo suite - no API keys used.")
+    print("LLM = MOCK (scripted, tokens estimated chars/4) | web evidence = FIXTURE files | installed_source = real local packages")
+    print("=" * 78)
+    ok_task = lambda r: r.get("outcome") == "succeeded" and r.get("first_pass_success")  # noqa: E731
+    steps = [("A - Python pre-flight (pydantic 2.9.2)", lambda: demo1("users"), ok_task),
+             ("B - TypeScript pre-flight (zod 3.23.8, TypeScript compiler API)", lambda: demo1("signup"), ok_task),
+             ("D - Stale-answer detection (FIXTURE evidence)", lambda: demo2(False),
+              lambda res: [c["status"] for c in res["claims"]] == ["CONTRADICTED", "CURRENT_SUPPORTED", "CURRENT_SUPPORTED",
+                                                                    "CONTRADICTED", "UNVERIFIED", "NOT_APPLICABLE"]),
+             ("E - Combined workflow (installed_source evidence)", demoE,
+              lambda x: [c["status"] for c in x[0]["claims"]] == ["CONTRADICTED", "CURRENT_SUPPORTED", "CONTRADICTED"] and ok_task(x[1])),
+             ("3 - Baseline vs VeriCode benchmark (MOCK)", lambda: demo3(runs),
+              lambda res: res["measurement"] == "MOCK" and all(t["savings_valid"] for t in res["tasks"]))]
+    results = []
+    for title, fn, check in steps:
+        print("\n" + "#" * 20, title, "#" * 20)
+        try:
+            out = fn()
+            results.append((title, "OK" if check(out) else "UNEXPECTED"))
+        except Exception as e:  # report and continue
+            results.append((title, f"FAILED: {type(e).__name__}: {e}"))
+            print("FAILED:", e)
+    print("\n" + "=" * 78 + "\nOffline suite summary (labels: MOCK / ESTIMATED / FIXTURE / installed_source):")
+    for t, r in results:
+        print(f"  {r:<10} {t}")
+    if any(r != "OK" for _, r in results):
+        raise SystemExit(1)
+    print("Demo C (arbitrary task) needs a real LLM: scripts/demo.sh c after configuring ANTHROPIC_API_KEY/OPENAI_API_KEY + VERICODE_CODER_MODEL.")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("demo", choices=["1", "1b", "2", "3", "a", "b", "c", "d", "e", "all"])
+    ap.add_argument("demo", choices=["1", "1b", "2", "3", "a", "b", "c", "d", "e", "all", "offline"])
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--runs", type=int, default=1)
     a = ap.parse_args()
     db.init_db()
     a.demo = {"a": "1", "b": "1b", "d": "2"}.get(a.demo, a.demo)
+    if a.demo == "offline":
+        offline_suite(a.runs)
+        return
     if a.demo == "c":
         print("#" * 20, "DEMO C - ARBITRARY CODING TASK", "#" * 20)
         demoC()

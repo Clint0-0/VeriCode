@@ -49,7 +49,9 @@ function EvidenceItem({ e }: { e: any }) {
         {e.url?.startsWith('installed://') ? <span className="font-mono text-emerald-200" title={e.url}>{e.title}</span>
           : <a className="text-sky-300 hover:underline" href={e.url} target="_blank" rel="noreferrer noopener">{e.title || e.url}</a>}
         <span className="text-slate-500">{e.domain} · {e.source_type} · authority {e.authority}</span>
+        {e.authority_tier && <Badge tone={e.authority_tier === 'primary' ? 'green' : e.authority_tier === 'suspicious' ? 'red' : e.authority_tier === 'secondary' ? 'amber' : 'gray'}>{e.authority_tier}</Badge>}
       </div>
+      {e.authority_explanation && <div className="mt-1 text-[11px] text-slate-500">authority: {e.authority_explanation}</div>}
       <div className="mt-1 text-slate-500">published/updated: <b className="text-slate-400">{e.published_date ?? 'unknown'}</b> · retrieved: {e.retrieved_at}{e.freshness != null ? ` · freshness ${e.freshness}` : ' · freshness unknown'}</div>
       <p className="mt-1 text-slate-300">“{e.excerpt}”</p>
       <p className="mt-1 text-slate-500">{e.relevance_explanation}</p>
@@ -71,7 +73,16 @@ export function ClaimCard({ c, corrected, open }: { c: any; corrected?: any; ope
         <span className="hidden text-xs text-slate-500 sm:inline">{cl.category} · {cl.volatility}</span>
       </>}>
         <p className="text-slate-200">“{cl.claim}”</p>
-        {cl.source_text && cl.source_text !== cl.claim && <p className="mt-1 text-xs text-slate-500">from: “{cl.source_text}” (chars {cl.span?.[0]}–{cl.span?.[1]})</p>}
+        {cl.source_text && cl.source_text !== cl.claim && <p className="mt-1 text-xs text-slate-500">from: “{cl.source_text}” (chars {cl.span?.[0]}–{cl.span?.[1]}){cl.derived ? ' · subject carried over from the same sentence' : ''}{cl.relation && cl.relation !== 'main' ? ` · ${cl.relation}` : ''}</p>}
+        {(cl.hedged || cl.features?.qualifiers?.length > 0 || cl.features?.comparison?.length > 0 || cl.features?.temporal_markers?.length > 0 || cl.notes?.length > 0) && (
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+            {cl.hedged && <Badge tone="amber">hedged: {cl.features?.hedges?.join(', ')}</Badge>}
+            {cl.features?.qualifiers?.map((q: string) => <Badge key={q} tone="gray">qualifier: {q}</Badge>)}
+            {cl.features?.comparison?.map((q: string) => <Badge key={q} tone="gray">comparison: {q}</Badge>)}
+            {cl.features?.temporal_markers?.map((q: string) => <Badge key={q} tone="blue">{q}</Badge>)}
+            {cl.notes?.map((n: string) => <span key={n} className="text-slate-500">{n}</span>)}
+          </div>
+        )}
         <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <KV k="Category / volatility" v={`${cl.category} / ${cl.volatility}`} />
           <KV k="Temporal sensitivity" v={cl.temporal_sensitivity ?? '—'} />
