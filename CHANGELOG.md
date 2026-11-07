@@ -40,6 +40,9 @@
 - Added `--ipc private`, `--ulimit nofile`, and forced container removal on timeout.
 - **Fix (found by CI):** running a container directly on a fresh host failed because the local base image was never
   created. It is now created on first use.
+- **Fix (found by CI, non-root hosts):** dockerd created root-owned mount points inside the workspace copy, so later
+  runs failed with EPERM. Mount points are now pre-created as the current user, and foreign-owned entries are tolerated.
+- Providers fail fast on a missing API key, before any network or TLS setup.
 - New tests: read-only dependency dirs, TypeScript check inside the container, cleanup, malicious commands.
 
 **Offline and repository**

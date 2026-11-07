@@ -24,6 +24,7 @@ This brings `main` (currently 2.0.0, `e823809`) up to date with the final-valida
   - Invalid usage metadata crashed.
   - Non-numeric Tavily credits crashed.
   - The Docker base image was not created when a container ran directly on a fresh host (found by CI).
+  - Root-owned Docker mount points broke repeated runs on non-root hosts (found by CI).
   - A NUL byte in a workspace path caused a 500 (fixed in 2.1.0).
 - **Sandbox:**
   - Optional self-contained image mode (no host `/usr` mount).
@@ -38,7 +39,7 @@ This brings `main` (currently 2.0.0, `e823809`) up to date with the final-valida
 - Backend: 228 passed, 2 skipped (live tests, no credentials). Same result with every task run inside Docker.
 - Frontend: 9 passed, typecheck clean, production build OK.
 - A fresh clone passes `scripts/setup.sh`, `scripts/test.sh` and `scripts/demo.sh offline`.
-- GitHub Actions results are linked on the PR page.
+- GitHub Actions run 42352842174 is green: all three jobs passed.
 
 ## Still requires credentials (not claimed done)
 Real Tavily retrieval, a real LLM provider, real evidence judging, an arbitrary task on a real model, and an

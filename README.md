@@ -69,7 +69,7 @@ Track 2 also act as *version-specific evidence* for Track 1 claims about librari
 | Coding agent on arbitrary tasks (real provider) | Implemented. Only the scripted mock has been run here (3 bundled tasks) |
 | Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes, fork bomb, host-file and symlink escape, read-only dependency dirs, TypeScript check in container, cleanup) |
 | Self-contained sandbox image (no host `/usr` mount) | Implemented. Command construction tested; image **build not executed here** (needs a registry pull) |
-| GitHub Actions CI (key-free) | Added (`.github/workflows/ci.yml`). Not yet observed running on GitHub from this environment |
+| GitHub Actions CI (key-free) | Implemented and **passing on GitHub**: backend 222 + 16 Docker-sandbox tests, offline demo suite, frontend typecheck/tests/build, 6 browser e2e |
 | Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
 | Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
 | Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. **All recorded numbers are MOCK** |
