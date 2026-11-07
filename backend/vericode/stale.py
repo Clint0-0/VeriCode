@@ -370,7 +370,7 @@ def _side(rs: list[EvidenceRecord]) -> list[dict]:
 
 def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str | None]], preferred: list[str],
                  now: datetime | None = None, origin: str = "live_tavily", judge: bool = False,
-                 task_id: str | None = None, ledger: list | None = None) -> ClaimReport:
+                 task_id: str | None = None, ledger: list | None = None, env=None) -> ClaimReport:
     if not c.requires_verification:
         return ClaimReport(c.to_dict(), "NOT_APPLICABLE", None, "not assessed (not time-sensitive or not a verifiable fact)", None, {},
                            f"Not checked: {c.reason}.")
@@ -400,8 +400,14 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
         records.append(EvidenceRecord(c.claim_id, c.claim, title, url, domain_of(url), stype, auth, retrieved, pub, redact(excerpt), rel,
                                       f"{int(rel * 100)}% subject-term overlap; {reason}", outcome, org, fr, age, repl, method))
 
+    if env is not None:  # combined workflow: installed-package source as version-specific evidence
+        from .local_evidence import check_claim
+        for le in check_claim(c, env):
+            records.insert(0, EvidenceRecord(c.claim_id, c.claim, le["title"], le["url"], le["domain"], le["source_type"], le["authority"],
+                                             retrieved, None, le["excerpt"], 1.0, f"100% (installed code); {le['reason']}", le["outcome"],
+                                             "installed_source", None, None, None, "installed_source"))
     judge_info = None
-    decided_by_value = any(r.outcome in ("support", "contradict") and r.method == "value" for r in records)
+    decided_by_value = any(r.outcome in ("support", "contradict") and r.method in ("value", "installed_source") for r in records)
     if judge and not decided_by_value and any(r.relevance >= 0.34 for r in records):
         try:
             j = llm_judge(c, records, task_id, ledger)
@@ -495,7 +501,7 @@ def confidence(c: Claim, decisive: list[EvidenceRecord], status: str) -> tuple[f
     a = max(r.authority for r in decisive)
     rel = sum(r.relevance for r in decisive) / len(decisive)
     comp = max(coverage(c, r.excerpt) for r in decisive)
-    by_value = any(r.method == "value" for r in decisive)
+    by_value = any(r.method in ("value", "installed_source") for r in decisive)
     spec = 1.0 if by_value else 0.5
     corr = min(len({r.domain for r in decisive}), 3) / 3
     dated = 1.0 if any(r.published_date for r in decisive) else 0.0
@@ -510,7 +516,7 @@ def confidence(c: Claim, decisive: list[EvidenceRecord], status: str) -> tuple[f
 # ----------------------------------------------------------------------------- orchestration
 def analyze(answer: str, question: str | None = None, urls: list[str] | None = None, preferred: list[str] | None = None,
             mode: str = "live", fixture: Path | None = None, now: datetime | None = None, search=None,
-            llm_extraction: bool = False) -> dict:
+            llm_extraction: bool = False, workspace: str | None = None) -> dict:
     from . import llm
     if len(answer) > 20000:
         raise ValueError("answer too long (max 20000 chars)")
@@ -539,7 +545,19 @@ def analyze(answer: str, question: str | None = None, urls: list[str] | None = N
         search = FixtureSearch(fixture or ROOT / "demos" / "stale_fixtures" / "demo2.json") if mode == "fixture" else TavilyClient()
     origin = getattr(search, "origin", "live_tavily")
     judge = settings.use_llm_judge and use_llm
-    reports = [verify_claim(c, search, user_sources, preferred or [], now, origin, judge, aid, ledger) for c in claims]
+    env = None
+    if workspace:
+        from .repo_intel import inspect_project
+        from .security import resolve_workspace
+        env = inspect_project(resolve_workspace(workspace))
+        from .local_evidence import mentioned_packages
+        for c in claims:  # claims about installed libraries are always checkable against installed code
+            if mentioned_packages(c, env) and c.verifiability != "opinion":
+                if c.category == "stable":
+                    c.category, c.reason = "api_documentation", "mentions an installed package of the selected workspace"
+                c.requires_verification = True
+                c.evidence_type = "installed_source + official_documentation"
+    reports = [verify_claim(c, search, user_sources, preferred or [], now, origin, judge, aid, ledger, env) for c in claims]
     counts: dict[str, int] = {}
     for r in reports:
         counts[r.status] = counts.get(r.status, 0) + 1
@@ -548,7 +566,7 @@ def analyze(answer: str, question: str | None = None, urls: list[str] | None = N
                "by_status": counts, "evidence_mode": origin, "search_calls": search.calls,
                "search_credits": round(getattr(search, "credits", 0.0) or 0.0, 2),
                "tavily_configured": bool(settings.tavily_api_key), "url_errors": url_errors,
-               "extraction": extraction_note, "llm_judge": "enabled" if judge else ("disabled: no real LLM provider" if not use_llm else "disabled in settings"),
+               "extraction": extraction_note, "workspace": workspace, "llm_judge": "enabled" if judge else ("disabled: no real LLM provider" if not use_llm else "disabled in settings"),
                "llm_tokens": summarize_ledger(ledger)}
     result = {"id": aid, "answer": answer, "question": question, "summary": summary, "claims": [asdict(r) for r in reports],
               "methodology": __doc__}

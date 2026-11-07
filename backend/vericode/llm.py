@@ -173,6 +173,72 @@ def complete_json(system: str, prompt: str, schema: type[T], stage: str, task_id
     raise LLMUnavailable(f"{stage}: model output failed schema validation after {max_attempts} attempts: {last}")
 
 
+def _sse_events(resp: httpx.Response):
+    """Yield parsed JSON payloads from a server-sent-events response."""
+    for line in resp.iter_lines():
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            yield json.loads(data)
+        except json.JSONDecodeError:
+            continue
+
+
+def _stream_call(client: httpx.Client, provider: str, model: str, system: str, prompt: str, max_tokens: int,
+                 stage: str) -> LLMResult:
+    """Streaming variant (long coder generations): text deltas are accumulated; usage comes from the stream's
+    usage events (Anthropic message_start/message_delta; OpenAI stream_options.include_usage final chunk)."""
+    if provider == "anthropic":
+        req = client.build_request("POST", f"{settings.anthropic_base_url}/v1/messages",
+                                   headers={"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01",
+                                            "content-type": "application/json"},
+                                   json={"model": model, "max_tokens": max_tokens, "system": system, "stream": True,
+                                         "messages": [{"role": "user", "content": prompt}]})
+    else:
+        limit_key = "max_completion_tokens" if "api.openai.com" in settings.openai_base_url else "max_tokens"
+        req = client.build_request("POST", f"{settings.openai_base_url}/chat/completions",
+                                   headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                                   json={"model": model, limit_key: max_tokens, "stream": True, "stream_options": {"include_usage": True},
+                                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]})
+    resp = client.send(req, stream=True)
+    try:
+        if resp.status_code in (429, 500, 502, 503, 529):
+            raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=req, response=resp)
+        if resp.status_code >= 400:
+            resp.read()
+            raise LLMUnavailable(f"{provider} HTTP {resp.status_code}: {redact(resp.text[:400])}")
+        text, tin, tout, have_usage = [], 0, 0, False
+        for ev in _sse_events(resp):
+            if provider == "anthropic":
+                t = ev.get("type")
+                if t == "message_start":
+                    u = (ev.get("message") or {}).get("usage") or {}
+                    tin = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
+                    tout = u.get("output_tokens", 0)
+                    have_usage = "input_tokens" in u
+                elif t == "content_block_delta" and (ev.get("delta") or {}).get("type") == "text_delta":
+                    text.append(ev["delta"].get("text", ""))
+                elif t == "message_delta":
+                    tout = (ev.get("usage") or {}).get("output_tokens", tout)
+                elif t == "error":
+                    raise LLMUnavailable(f"anthropic stream error: {redact(json.dumps(ev.get('error'))[:300])}")
+            else:
+                for ch in ev.get("choices") or []:
+                    text.append(((ch.get("delta") or {}).get("content")) or "")
+                u = ev.get("usage")
+                if u:
+                    tin, tout, have_usage = u.get("prompt_tokens", 0), u.get("completion_tokens", 0), True
+        out = "".join(text)
+        if have_usage:
+            return LLMResult(out, tin, tout, False, provider, model, stage)
+        return LLMResult(out, estimate_tokens(system + prompt), estimate_tokens(out), True, provider, model, stage)
+    finally:
+        resp.close()
+
+
 def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,
           transport: httpx.BaseTransport | None = None) -> LLMResult:
     last: Exception | None = None
@@ -180,6 +246,10 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
     for attempt in range(3):
         try:
             with httpx.Client(transport=transport, timeout=timeout) as client:
+                if settings.llm_stream and stage in ("coder", "repair") and provider in ("anthropic", "openai"):
+                    if not (settings.anthropic_api_key if provider == "anthropic" else settings.openai_api_key):
+                        raise LLMUnavailable(f"{provider.upper()}_API_KEY not set")
+                    return _stream_call(client, provider, model, system, prompt, max_tokens, stage)
                 if provider == "anthropic":
                     if not settings.anthropic_api_key:
                         raise LLMUnavailable("ANTHROPIC_API_KEY not set")

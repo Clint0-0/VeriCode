@@ -28,6 +28,8 @@ def workspace_root() -> Path:
 
 def resolve_workspace(path: str) -> Path:
     """A project path must live inside the configured workspaces root."""
+    if not path or "\x00" in path or len(path) > 1000:
+        raise SecurityError("invalid workspace path")
     p = Path(path)
     if not p.is_absolute():
         p = workspace_root() / p

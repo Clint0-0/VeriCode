@@ -22,7 +22,7 @@ CATEGORY_RULES: list[tuple[str, re.Pattern]] = [
     ("law_regulation", re.compile(r"\b(law|act|regulation|directive|GDPR|statute|legislation|bill|ordinance|tax rate|mandat(e|ory)|legal(ly)?|compliance|court|ruling)\b", re.I)),
     ("deadline", re.compile(r"\b(deadline|due (by|on)|no later than|expires?|end[- ]of[- ]life|EOL|sunset|until)\b", re.I)),
     ("software_version", re.compile(r"\b(version|v\d+|LTS|stable release|latest release|release candidate)\b|\b\d+\.\d+(\.\d+)?\b", re.I)),
-    ("api_documentation", re.compile(r"\b(API|endpoint|SDK|function|method|parameter|deprecated|decorator|library|module|supports?|framework|async(hronous)?)\b", re.I)),
+    ("api_documentation", re.compile(r"\b(API|endpoint|SDK|function|method|parameter|deprecated|decorator|library|module|supports?|framework|async(hronous)?|provides?|exposes?|exports?|class|accepts?|returns?)\b", re.I)),
     ("release_date", re.compile(r"\b(released|launched|announced|introduced|shipped|available since|debuted)\b", re.I)),
     ("product_spec", re.compile(r"\b\d+\s?(GB|TB|MB|MHz|GHz|mAh|inch(es)?|cores?|nm|W|Hz|tokens?)\b|\b(context window|battery|resolution|RAM|processor|chip)\b", re.I)),
     ("current_events", re.compile(r"\b(currently|right now|today|this (year|month|week)|recently|as of|ongoing|breaking)\b", re.I)),

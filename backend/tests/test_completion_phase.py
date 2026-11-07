@@ -125,6 +125,7 @@ def test_anthropic_request_and_actual_usage(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-0000000000")
     monkeypatch.setattr(settings, "coder_model", "model-under-test")
+    monkeypatch.setattr(settings, "llm_stream", False)
     seen = {}
 
     def h(req):

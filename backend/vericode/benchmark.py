@@ -76,6 +76,16 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
                 "by_stage": rs[-1]["tokens"]["by_stage"], "measurement": rs[-1]["tokens"]["measurement"],
                 "task_ids": [r["task_id"] for r in rs], "errors": [r.get("error") for r in rs if r.get("error")],
             }
+        # quality signal: did the baseline ship APIs that VeriCode's pre-flight flagged (same run index)?
+        from .agent import api_corrections
+        shipped = []
+        for b, v in zip(modes["baseline"], modes["vericode"]):
+            pf = db.loads((db.row("SELECT preflight_json FROM tasks WHERE id=?", (v["task_id"],)) or {}).get("preflight_json"), {})
+            bc = api_corrections(pf.get("findings", []), b.get("diff", ""))
+            vc = v.get("api_corrections", [])
+            shipped.append({"baseline_flagged_apis_used": sum(1 for x in bc if x["result"] == "still_used"),
+                            "vericode_flagged_apis_used": sum(1 for x in vc if x["result"] == "still_used"),
+                            "baseline_details": [x for x in bc if x["result"] == "still_used"]})
         both_ok = all(r.get("success") for r in modes["baseline"] + modes["vericode"])
         paired = [round((b["tokens"]["total"] - v["tokens"]["total"]) / b["tokens"]["total"] * 100, 1)
                   for b, v in zip(modes["baseline"], modes["vericode"]) if b.get("success") and v.get("success") and b["tokens"]["total"]]
@@ -84,7 +94,7 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
         flagged = det["tp"] + det["fp"]
         per_task.append({
             "task": t["id"], "title": t["title"], "summary": summary, "token_savings_pct": savings,
-            "savings_valid": both_ok, "paired_run_savings_pct": paired,
+            "savings_valid": both_ok, "paired_run_savings_pct": paired, "flagged_api_usage": shipped,
             "savings_note": None if both_ok else "Not computed: at least one run failed; comparing failed and successful runs would be unfair.",
             "detection": {**det, "detection_rate": round(det["tp"] / (det["tp"] + det["fn"]), 2) if det["tp"] + det["fn"] else None,
                           "false_positive_rate": round(det["fp"] / (det["fp"] + det["tn"]), 2) if det["fp"] + det["tn"] else None,

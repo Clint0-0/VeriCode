@@ -136,6 +136,7 @@ class StaleReq(BaseModel):
     preferred_domains: list[str] = Field(default=[], max_length=10)
     mode: Literal["live", "fixture"] = "live"
     llm_extraction: bool = False
+    workspace: str | None = Field(default=None, max_length=200)
 
 
 class BenchReq(BaseModel):
@@ -322,7 +323,7 @@ def apply_task(tid: str):
 # ------------------------------------------------------------------ stale-answer detection
 @app.post("/api/stale/analyze")
 def stale_analyze(req: StaleReq):
-    return stale.analyze(req.answer, req.question, req.urls, req.preferred_domains, req.mode, llm_extraction=req.llm_extraction)
+    return stale.analyze(req.answer, req.question, req.urls, req.preferred_domains, req.mode, llm_extraction=req.llm_extraction, workspace=req.workspace)
 
 
 @app.get("/api/stale/demo")
@@ -383,7 +384,19 @@ def token_analytics():
     for t in per_task:
         m = db.row("SELECT GROUP_CONCAT(DISTINCT measurement) m FROM token_usage WHERE task_id=?", (t["id"],))
         t["measurement"] = (m or {}).get("m")
-    return {"by_stage": by_stage, "by_mode": by_mode, "per_task": per_task, "cache_entries": cache_hits,
+    by_model = db.rows("SELECT provider, model, COALESCE(measurement,'') measurement, SUM(input_tokens) input, SUM(output_tokens) output, COUNT(*) calls "
+                       "FROM token_usage GROUP BY provider, model, measurement")
+    for m in by_model:
+        price = settings.model_prices.get(m["model"])
+        if m["measurement"] == "MOCK" or m["provider"] == "mock":
+            m["cost_usd"], m["cost_basis"] = None, "mock: no cost"
+        elif price:
+            m["cost_usd"] = round(((m["input"] or 0) * price["input"] + (m["output"] or 0) * price["output"]) / 1e6, 6)
+            m["cost_basis"] = "per-model price from Settings"
+        else:
+            m["cost_usd"] = round(((m["input"] or 0) * settings.cost_input_per_mtok + (m["output"] or 0) * settings.cost_output_per_mtok) / 1e6, 6)
+            m["cost_basis"] = "default price from Settings (set a per-model price for accuracy)"
+    return {"by_stage": by_stage, "by_mode": by_mode, "per_task": per_task, "cache_entries": cache_hits, "by_model": by_model,
             "by_measurement": by_measurement, "search": search,
             "cost_per_mtok": {"input": settings.cost_input_per_mtok, "output": settings.cost_output_per_mtok}}
 

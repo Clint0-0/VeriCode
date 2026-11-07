@@ -72,6 +72,8 @@ class Settings:
     # cost per 1M tokens (USD), user-configurable, used only for display
     cost_input_per_mtok: float = field(default_factory=lambda: float(_env("VERICODE_COST_IN", "3.0")))
     cost_output_per_mtok: float = field(default_factory=lambda: float(_env("VERICODE_COST_OUT", "15.0")))
+    # per-model USD price per 1M tokens: {"model-id": {"input": 3.0, "output": 15.0}} (user-maintained; no prices are invented)
+    model_prices: dict = field(default_factory=dict)
     # sandbox: auto (docker if daemon reachable, else process), docker, process
     sandbox_backend: str = field(default_factory=lambda: _env("VERICODE_SANDBOX", "auto"))
     sandbox_memory: str = field(default_factory=lambda: _env("VERICODE_SANDBOX_MEMORY", "1g"))
@@ -85,6 +87,7 @@ class Settings:
     # network exposure / auth
     host: str = field(default_factory=lambda: _env("VERICODE_HOST", "127.0.0.1"))
     allow_remote: bool = field(default_factory=lambda: _env("VERICODE_ALLOW_REMOTE", "0") == "1")
+    llm_stream: bool = field(default_factory=lambda: _env("VERICODE_LLM_STREAM", "1") == "1")
     llm_timeout: float = field(default_factory=lambda: float(_env("VERICODE_LLM_TIMEOUT", "180")))
 
     @property
@@ -134,6 +137,8 @@ class Settings:
             "tavily_search_depth": self.tavily_search_depth,
             "default_workspace": self.default_workspace,
             "authority_rules": self.authority_rules,
+            "model_prices": self.model_prices,
+            "llm_stream": self.llm_stream,
             "host": self.host,
             "allow_remote": self.allow_remote,
             "openai_base_url": self.openai_base_url,
@@ -144,7 +149,7 @@ class Settings:
         "cache_ttl_seconds": int, "tavily_timeout": float, "tavily_max_retries": int,
         "cost_input_per_mtok": float, "cost_output_per_mtok": float, "llm_provider": str,
         "sandbox_backend": str, "use_llm_judge": bool, "live_search_default": bool, "tavily_search_depth": str,
-        "default_workspace": str,
+        "default_workspace": str, "llm_stream": bool,
     }
 
     def load_persisted(self) -> None:
@@ -175,6 +180,9 @@ class Settings:
                 for cat, days in v.items():
                     if cat in self.half_lives and float(days) > 0:
                         self.half_lives[cat] = float(days)
+            elif k == "model_prices" and isinstance(v, dict):
+                self.model_prices = {str(m): {"input": float(p.get("input", 0)), "output": float(p.get("output", 0))}
+                                     for m, p in v.items() if isinstance(p, dict)}
             elif k == "authority_rules" and isinstance(v, dict):
                 self.authority_rules = {str(c): [str(d).lower() for d in ds][:50] for c, ds in v.items() if isinstance(ds, list)}
             else:

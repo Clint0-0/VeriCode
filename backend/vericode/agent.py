@@ -332,6 +332,7 @@ class TaskRunner:
                     user = (f"TASK:\n{self.prompt}\n\nREPOSITORY FILES:\n<untrusted>\n{context}\n</untrusted>\n\n"
                             f"VALIDATION FAILED:\n{failure}\nFix it.")
             diff = unified_diff(self.project, sandbox, changed_all)
+            result["api_corrections"] = api_corrections(preflight.get("findings", []), diff) if self.mode == "vericode" else []
             if checks["passed"]:
                 outcome = "succeeded"
             elif changed_all and not checks.get("validated") and not any(a["edit_errors"] for a in attempts[-1:]):
@@ -357,6 +358,37 @@ class TaskRunner:
                       (result.get("outcome", "failed"), result.get("outcome", "failed"), time.time(), int(bool(result.get("success"))),
                        db.dumps(preflight), db.dumps(result), db.dumps(self.events), result["provider"], self.task_id))
         return result
+
+
+PROBLEM_STATUSES = {"NOT_FOUND", "INCOMPATIBLE", "DEPRECATED"}
+
+
+def api_corrections(findings: list[dict], diff: str) -> list[dict]:
+    """For each problematic planned API, check the ADDED lines of the final diff: was the flagged usage avoided
+    (auto-corrected) or does it still appear? Purely textual, reported as such."""
+    added = "\n".join(l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++"))
+    out = []
+    for f in findings or []:
+        if f.get("status") not in PROBLEM_STATUSES:
+            continue
+        name = re.split(r"[.:]", f["planned_api"])[-1]
+        patterns = []
+        if f["status"] == "INCOMPATIBLE":
+            bad = [a["argument"] for a in f.get("argument_checks", []) if a["status"] in ("rejected", "unsupported")]
+            if f.get("ecosystem") == "node":
+                patterns = [re.escape(f"{name}({', '.join(f.get('arguments', []))})")]
+            else:
+                patterns = [rf"\b{re.escape(a)}\s*=" for a in bad if re.fullmatch(r"\w+", a)]
+        else:
+            patterns = [rf"(?<![\w]){re.escape(name)}\s*\(", rf"@{re.escape(name)}\b", rf"import[^\n]*\b{re.escape(name)}\b"]
+        if not patterns or not diff:
+            out.append({"planned_api": f["planned_api"], "status": f["status"], "result": "not_checked"})
+            continue
+        hit = next((p for p in patterns if re.search(p, added)), None)
+        out.append({"planned_api": f["planned_api"], "status": f["status"],
+                    "result": "still_used" if hit else "corrected",
+                    "detail": f"flagged usage found in generated code (/{hit}/)" if hit else "flagged usage absent from generated code"})
+    return out
 
 
 def _read(p: Path) -> str | None:
