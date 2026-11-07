@@ -163,7 +163,8 @@ def test_command_allowlist(tmp_path):
             run_command(bad, tmp_path)
 
 
-def test_command_env_scrubbed_and_timeout(tmp_path, monkeypatch):
+def test_command_env_scrubbed_and_timeout(tmp_path, monkeypatch, sample_project):
+    (tmp_path / ".venv").symlink_to(sample_project / ".venv")  # project interpreter with pytest (CI python lacks it)
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-SECRETSECRET123")
     (tmp_path / "test_env.py").write_text("import os, time\ndef test_env():\n    assert 'TAVILY_API_KEY' not in os.environ\n")
     r = run_command(["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"], tmp_path)

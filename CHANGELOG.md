@@ -38,6 +38,8 @@
 - Optional **self-contained image** mode (`docker/sandbox.Dockerfile`, `scripts/build_sandbox_image.sh`), with no host `/usr` mount.
 - In host mode, a venv interpreter prefix outside `/usr` (pyenv, setup-python) is mounted read-only.
 - Added `--ipc private`, `--ulimit nofile`, and forced container removal on timeout.
+- **Fix (found by CI):** running a container directly on a fresh host failed because the local base image was never
+  created. It is now created on first use.
 - New tests: read-only dependency dirs, TypeScript check inside the container, cleanup, malicious commands.
 
 **Offline and repository**

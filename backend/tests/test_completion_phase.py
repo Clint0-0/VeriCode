@@ -306,7 +306,8 @@ def test_ts_task_vericode_vs_baseline(monkeypatch):
 
 
 # ---------------------------------------------------------------- sandbox
-def test_process_sandbox_labels_network(tmp_path):
+def test_process_sandbox_labels_network(tmp_path, sample_project):
+    (tmp_path / ".venv").symlink_to(sample_project / ".venv")
     (tmp_path / "test_ok.py").write_text("def test_ok():\n    assert True\n")
     r = security.run_command(["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"], tmp_path, backend="process")
     assert r.returncode == 0 and r.isolation.startswith("process:")

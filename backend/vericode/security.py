@@ -341,7 +341,10 @@ def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, P
     import uuid
     name = f"vc-{uuid.uuid4().hex[:10]}"
     _prepare_writable(cwd)
-    cmd, inner, isolation = docker_command(argv, cwd, ro_mounts, name, self_contained_image())
+    image = self_contained_image()
+    if not image:
+        ensure_sandbox_image()  # host-toolchain base image is created locally on first use (no registry pull)
+    cmd, inner, isolation = docker_command(argv, cwd, ro_mounts, name, image)
     try:
         p = subprocess.run(cmd + inner, capture_output=True, text=True, timeout=timeout)
         return CommandResult(argv, p.returncode, redact(p.stdout[-20000:]), redact(p.stderr[-20000:]), False, isolation)
