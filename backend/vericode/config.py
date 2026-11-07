@@ -84,6 +84,7 @@ class Settings:
     tavily_search_depth: str = field(default_factory=lambda: _env("TAVILY_SEARCH_DEPTH", "basic"))
     default_workspace: str = "sample_project"
     authority_rules: dict = field(default_factory=lambda: dict(DEFAULT_AUTHORITY_RULES))
+    trusted_registry: dict = field(default_factory=dict)  # user additions to source_authority.DEFAULT_TRUSTED_REGISTRY
     # network exposure / auth
     host: str = field(default_factory=lambda: _env("VERICODE_HOST", "127.0.0.1"))
     allow_remote: bool = field(default_factory=lambda: _env("VERICODE_ALLOW_REMOTE", "0") == "1")
@@ -137,6 +138,7 @@ class Settings:
             "tavily_search_depth": self.tavily_search_depth,
             "default_workspace": self.default_workspace,
             "authority_rules": self.authority_rules,
+            "trusted_registry": self.trusted_registry,
             "model_prices": self.model_prices,
             "llm_stream": self.llm_stream,
             "host": self.host,
@@ -183,6 +185,8 @@ class Settings:
             elif k == "model_prices" and isinstance(v, dict):
                 self.model_prices = {str(m): {"input": float(p.get("input", 0)), "output": float(p.get("output", 0))}
                                      for m, p in v.items() if isinstance(p, dict)}
+            elif k == "trusted_registry" and isinstance(v, dict):
+                self.trusted_registry = {str(c): [str(d).lower() for d in ds][:100] for c, ds in v.items() if isinstance(ds, list)}
             elif k == "authority_rules" and isinstance(v, dict):
                 self.authority_rules = {str(c): [str(d).lower() for d in ds][:50] for c, ds in v.items() if isinstance(ds, list)}
             else:

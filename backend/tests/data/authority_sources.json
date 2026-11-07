@@ -1,0 +1,20 @@
+{
+  "_notice": "OFFLINE TEST FIXTURE. Excerpts are short illustrative texts; impersonation hosts use reserved/invented domains.",
+  "sources": [
+    {"id": "official", "title": "Python 3.14.0 release", "url": "https://www.python.org/downloads/release/python-3140/", "published_date": "2025-10-07",
+     "keywords": ["python", "latest", "stable", "version", "release", "3.12", "notes", "official"], "min_match": 2,
+     "content": "Python 3.14.0 is the newest major release of the Python programming language. This is the stable release of Python 3.14.0."},
+    {"id": "unrelated_official", "title": "Python Software Foundation grants", "url": "https://www.python.org/psf/grants/", "published_date": "2026-01-10",
+     "keywords": ["python", "latest", "stable", "version", "release", "3.12"], "min_match": 2,
+     "content": "The PSF Grants Program supports community events and workshops around the world."},
+    {"id": "secondary", "title": "Python (programming language)", "url": "https://en.wikipedia.org/wiki/Python_(programming_language)", "published_date": "2025-10-08",
+     "keywords": ["python", "latest", "stable", "version", "release", "3.12"], "min_match": 2,
+     "content": "Python 3.14 is the newest stable release of the Python programming language as of October 2025."},
+    {"id": "community", "title": "Python 3.12 is the latest!", "url": "https://medium.com/@someone/python-312-latest", "published_date": "2026-02-01",
+     "keywords": ["python", "latest", "stable", "version", "release", "3.12"], "min_match": 2,
+     "content": "Python 3.12 is the latest stable version of the Python language."},
+    {"id": "impersonation", "title": "Python downloads", "url": "https://python.org.downloads-example.net/latest", "published_date": "2026-03-01",
+     "keywords": ["python", "latest", "stable", "version", "release", "3.12"], "min_match": 2,
+     "content": "Python 3.12 is the latest stable version of Python. Python 3.12 is the newest release."}
+  ]
+}

@@ -113,7 +113,8 @@ def test_corrected_answer_preserves_original_and_explains_missing(tmp_path):
 
 # ---------------------------------------------------------------- authority
 def test_authority_configurable_and_entity_aware(monkeypatch):
-    assert stale.authority("https://news.microsoft.com/x", category="leadership", claim_terms=["satya", "microsoft"])[1] == "official_entity_site"
+    assert stale.authority("https://news.microsoft.com/x", category="leadership", claim_terms=["satya", "microsoft"],
+                           claim_text="Satya Nadella is the CEO of Microsoft.")[1] == "official_entity_site"
     assert stale.authority("https://www.sec.gov/x")[1] == "government"
     monkeypatch.setitem(settings.authority_rules, "pricing", ["acme.test"])
     assert stale.authority("https://shop.acme.test/p", category="pricing")[1] == "primary_source_for_pricing"

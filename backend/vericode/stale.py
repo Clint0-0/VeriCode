@@ -34,6 +34,7 @@ from . import db
 from .claims import NEGATION, Claim, extract_claims, extract_claims_llm, extract_values, norm_term
 from .config import ROOT, settings
 from .security import SecurityError, check_public_url, redact
+from .source_authority import assess as assess_authority
 from .tavily import SearchOutcome, TavilyClient, TavilyResult, domain_of
 
 CATEGORY_QUERY_HINT = {
@@ -60,34 +61,10 @@ def _domain_match(d: str, pattern: str) -> bool:
 
 
 def authority(url: str, preferred: list[str] | None = None, category: str | None = None,
-              claim_terms: list[str] | None = None) -> tuple[float, str]:
-    """Configurable authority: preferred domains > category primary sources (Settings) > government >
-    the claim's own entity site (e.g. microsoft.com for a Microsoft claim) > docs/registries > news >
-    encyclopedia > general web > community. Authority only matters for sources whose content is relevant."""
-    d = domain_of(url)
-    if any(_domain_match(d, p) for p in (preferred or [])):
-        return 0.95, "preferred_source"
-    if category and any(_domain_match(d, p) for p in settings.authority_rules.get(category, [])):
-        return 0.95, f"primary_source_for_{category}"
-    if re.search(r"(\.gov(\.[a-z]{2})?|\.gouv\.[a-z]{2}|\.gob\.[a-z]{2}|\.mil|europa\.eu|\.govt\.nz|gc\.ca)$", d):
-        return 1.0, "government"
-    if any(_domain_match(d, l) for l in LOW):
-        return 0.35, "community/blog (secondary)"
-    labels = {x for x in d.split(".") if x not in GENERIC_LABELS and len(x) >= 4}
-    terms = {t.lower().replace("-", "") for t in (claim_terms or [])}
-    if labels & terms:
-        return 0.9, "official_entity_site"
-    if d in ("pypi.org", "npmjs.com", "github.com", "registry.npmjs.org"):
-        return 0.8, "package_registry/repository"
-    if d.startswith(OFFICIAL_HINTS):
-        return 0.8, "official_documentation"
-    if d.endswith("wikipedia.org"):
-        return 0.6, "encyclopedia (secondary)"
-    if d in NEWS or any(d.endswith("." + n) for n in NEWS):
-        return 0.7, "news (secondary)"
-    if d.endswith((".org", ".io", ".dev")) and d.count(".") <= 2:
-        return 0.7, "organization/project site"
-    return 0.5, "general_web"
+              claim_terms: list[str] | None = None, claim_text: str = "") -> tuple[float, str]:
+    """Backwards-compatible wrapper around source_authority.assess (see that module for the rules)."""
+    a = assess_authority(url, preferred, category, claim_text, claim_terms)
+    return a.score, a.source_type
 
 
 def parse_date(s: str | None) -> datetime | None:
@@ -337,7 +314,9 @@ class EvidenceRecord:
     freshness: float | None = None
     age_days: float | None = None
     replacement: str | None = None
-    method: str = "none"  # value | lexical | llm_judge | none
+    method: str = "none"  # value | lexical | llm_judge | installed_source | none
+    authority_tier: str = "unknown"  # primary | secondary | unknown | suspicious
+    authority_explanation: str = ""
 
 
 @dataclass
@@ -395,21 +374,24 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     for title, url, text, pub, org in raw:
         excerpt, rel = best_excerpt(text.strip(), c.subject_terms, c.values)
         excerpt = excerpt.strip()
-        auth, stype = authority(url, preferred, c.category, c.subject_terms)
+        au = assess_authority(url, preferred, c.category, c.claim, c.subject_terms)
+        auth, stype = au.score, au.source_type
         if rel >= 0.34:
             outcome, reason, repl, method = compare(c, excerpt)
         else:
             outcome, reason, repl, method = "irrelevant", "source does not discuss the claim's subject", None, "none"
         fr, age = freshness(pub, c.category, now)
         records.append(EvidenceRecord(c.claim_id, c.claim, title, url, domain_of(url), stype, auth, retrieved, pub, redact(excerpt), rel,
-                                      f"{int(rel * 100)}% subject-term overlap; {reason}", outcome, org, fr, age, repl, method))
+                                      f"{int(rel * 100)}% subject-term overlap; {reason}", outcome, org, fr, age, repl, method,
+                                      au.tier, au.explanation))
 
     if env is not None:  # combined workflow: installed-package source as version-specific evidence
         from .local_evidence import check_claim
         for le in check_claim(c, env):
             records.insert(0, EvidenceRecord(c.claim_id, c.claim, le["title"], le["url"], le["domain"], le["source_type"], le["authority"],
                                              retrieved, None, le["excerpt"], 1.0, f"100% (installed code); {le['reason']}", le["outcome"],
-                                             "installed_source", None, None, None, "installed_source"))
+                                             "installed_source", None, None, None, "installed_source", "primary",
+                                             "installed package code in the selected workspace (version-specific)"))
     judge_info = None
     decided_by_value = any(r.outcome in ("support", "contradict") and r.method in ("value", "installed_source") for r in records)
     if judge and not decided_by_value and any(r.relevance >= 0.34 for r in records):
@@ -429,6 +411,10 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
                 rec.replacement = j.get("corrected_value")
                 rec.relevance_explanation += f"; evidence judge: {j['verdict']} (quote: \"{j['quotes'][0][:160]}\")"
 
+    for r in records:  # impersonation-like domains never count as evidence either way
+        if r.authority_tier == "suspicious" and r.outcome in ("support", "contradict"):
+            r.relevance_explanation += f" (ignored: {r.authority_explanation})"
+            r.outcome = "neutral"
     sup = [r for r in records if r.outcome == "support"]
     con = [r for r in records if r.outcome == "contradict"]
     decisive: list[EvidenceRecord] = []
@@ -436,9 +422,11 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     if sup and con:
         sd = [parse_date(r.published_date) for r in sup]
         cd = [parse_date(r.published_date) for r in con]
-        if all(sd) and all(cd) and min(cd) > max(sd) and max(r.authority for r in con) >= 0.5:
+        con_auth, sup_auth = max(r.authority for r in con), max(r.authority for r in sup)
+        # newer evidence of at least comparable authority (never community/suspicious) supersedes older support
+        if all(sd) and all(cd) and min(cd) > max(sd) and con_auth >= sup_auth - 0.05 and con_auth > 0.35:
             status, decisive = "CONTRADICTED", con
-            expl = "Newer evidence contradicts the claim; older sources supported it at the time."
+            expl = "Newer evidence of comparable or higher authority contradicts the claim; older sources supported it at the time."
         else:
             status, decisive = "CONFLICTING_EVIDENCE", sup + con
             why = []
