@@ -22,9 +22,9 @@ CATEGORY_RULES: list[tuple[str, re.Pattern]] = [
     ("law_regulation", re.compile(r"\b(law|act|regulation|directive|GDPR|statute|legislation|bill|ordinance|tax rate|mandat(e|ory)|legal(ly)?|compliance|court|ruling)\b", re.I)),
     ("deadline", re.compile(r"\b(deadline|due (by|on)|no later than|expires?|end[- ]of[- ]life|EOL|sunset|until)\b", re.I)),
     ("software_version", re.compile(r"\b(version|v\d+|LTS|stable release|latest release|release candidate)\b|\b\d+\.\d+(\.\d+)?\b", re.I)),
+    ("product_spec", re.compile(r"\b\d+\s?(GB|TB|MB|MHz|GHz|mAh|inch(es)?|cores?|nm|W|Hz|tokens?)\b|\b(context window|battery|resolution|RAM|processor|chip)\b", re.I)),
     ("api_documentation", re.compile(r"\b(API|endpoint|SDK|function|method|parameter|deprecated|decorator|library|module|supports?|framework|async(hronous)?|provides?|exposes?|exports?|class|accepts?|returns?)\b", re.I)),
     ("release_date", re.compile(r"\b(released|launched|announced|introduced|shipped|available since|debuted)\b", re.I)),
-    ("product_spec", re.compile(r"\b\d+\s?(GB|TB|MB|MHz|GHz|mAh|inch(es)?|cores?|nm|W|Hz|tokens?)\b|\b(context window|battery|resolution|RAM|processor|chip)\b", re.I)),
     ("current_events", re.compile(r"\b(currently|right now|today|this (year|month|week)|recently|as of|ongoing|breaking)\b", re.I)),
 ]
 TEMPORAL = re.compile(r"\b(latest|current(ly)?|now|newest|most recent|today|still|as of|is the|are the|costs?|plans? to|will|upcoming|no longer)\b", re.I)
@@ -32,7 +32,7 @@ PAST_EVENT = re.compile(r"\b(introduced|was released|released in|launched in|fou
 FUTURE = re.compile(r"\b(will|plans? to|is expected to|scheduled to|upcoming|by 20\d\d)\b", re.I)
 NEGATION = re.compile(r"\b(not|no longer|never|cannot|can't|doesn't|does not|don't|do not|isn't|aren't|won't|without|removed|dropped)\b", re.I)
 CONDITIONAL = re.compile(r"^\s*(if|when|unless|only if|provided that|assuming)\b|\b(if|unless|only if|provided that)\b", re.I)
-OPINION = re.compile(r"\b(i think|i believe|in my opinion|best|worst|easiest|great|amazing|should|recommend|probably|might)\b", re.I)
+OPINION = re.compile(r"\b(i think|i believe|i feel|in my opinion|best|worst|easiest|great|amazing|awesome|terrible|should|recommend|beautiful|elegant)\b", re.I)
 TIMELESS = re.compile(r"\b(is a|are a|is an|consists of|is defined as|equals|boils at|speed of light|prime number|was born|capital of)\b", re.I)
 
 VOLATILITY = {"pricing": "high", "software_version": "high", "current_events": "high", "deadline": "high",
@@ -78,6 +78,13 @@ class Claim:
     negated: bool = False
     conditional: bool = False
     extraction: str = "deterministic"
+    fragment_span: list[int] = field(default_factory=list)   # exact sub-span of this claim's text, when it is verbatim
+    derived: bool = False                                    # True when a shared subject was carried over
+    relation: str = "main"                                   # main | subordinate:<conj> | relative | coordinated
+    hedged: bool = False
+    hypothetical: bool = False
+    features: dict = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -152,6 +159,13 @@ def extract_values(text: str) -> dict:
     pct = PERCENT_RE.findall(text)
     if pct:
         vals["percent"] = pct
+    from .claim_parse import QUANTITY, VERSION_RANGE, features as _f
+    vr = _f(text)["version_ranges"]
+    if vr:
+        vals["version_range"] = vr
+    qty = [f"{n} {u.lower()}" for n, u in QUANTITY.findall(text) if u not in ("%",) and u.lower() != "percent"]
+    if qty:
+        vals["quantity"] = qty
     names = [n for n in NAME_RE.findall(text) if not re.match(r"^(The|This|In|As|On|At|If|When|Python|Java)\b", n)]
     if names:
         vals["name"] = names
@@ -199,6 +213,8 @@ def categorize(sentence: str) -> tuple[str, str]:
 
 
 def classify(text: str, cid: str, span: tuple[int, int], source: str) -> Claim:
+    from .claim_parse import features as _features
+    feats = _features(text)
     cat, why = categorize(text)
     temporal = bool(TEMPORAL.search(text))
     past = bool(PAST_EVENT.search(text)) and not re.search(r"\b(latest|current|now)\b", text, re.I)
@@ -219,12 +235,34 @@ def classify(text: str, cid: str, span: tuple[int, int], source: str) -> Claim:
     requires = cat != "stable" and verif != "opinion"
     if cat == "stable":
         vol, sens = "low", "timeless" if not past else "past_event"
+    if feats["past_state"]:
+        sens, past = "past_event", True  # "previously/formerly X" describes a past state, not the present
     if text.endswith("?"):
         requires, vol, why, verif = False, "low", "question, not a claim", "opinion"
     if verif == "opinion":
         why, vol = "subjective/opinion wording: not a verifiable factual claim", "low"
-    return Claim(cid, text, cat, vol, requires, temporal, past, extract_values(text), subject_terms(text), why,
-                 [span[0], span[1]], source, sens, verif, EVIDENCE_TYPE[cat] if requires else "none", negated, conditional)
+    if feats["hypothetical"] and verif != "opinion":
+        verif, requires, vol, why = "hypothetical", False, "low", "hypothetical/counterfactual statement: not a factual claim"
+    if feats["incomplete"] and verif not in ("opinion", "hypothetical"):
+        requires, verif, why = True, "incomplete", "subject is a pronoun that cannot be resolved within the sentence; kept but never verified"
+    c = Claim(cid, text, cat, vol, requires, temporal, past, extract_values(text), subject_terms(text), why,
+              [span[0], span[1]], source, sens, verif, EVIDENCE_TYPE[cat] if requires else "none", negated, conditional)
+    c.hedged, c.hypothetical, c.features = feats["hedged"], feats["hypothetical"], feats
+    return c
+
+
+def decompose(sentence: str) -> list[tuple[str, bool, str, list[str]]]:
+    """sentence -> [(claim_text, derived, relation, notes)] via subordinate -> relative -> coordinated splitting."""
+    from .claim_parse import split_relative, split_subordinate
+    out = []
+    for piece in split_subordinate(sentence):
+        for rp in split_relative(piece):
+            parts = split_compound(rp.text)
+            for p in parts:
+                derived = (not rp.exact) or (len(parts) > 1 and p.rstrip(".") not in sentence)
+                rel = rp.relation if len(parts) == 1 else ("coordinated" if rp.relation == "main" else rp.relation)
+                out.append((p, derived, rel, list(rp.notes)))
+    return out
 
 
 def extract_claims(answer: str) -> list[Claim]:
@@ -232,9 +270,16 @@ def extract_claims(answer: str) -> list[Claim]:
     for sent, start, end in segment(answer):
         if len(sent.split()) < 3:
             continue
-        parts = split_compound(sent)
-        for p in parts:
-            claims.append(classify(p, f"claim_{len(claims) + 1:03d}", (start, end), sent))
+        for text, derived, relation, notes in decompose(sent):
+            c = classify(text, f"claim_{len(claims) + 1:03d}", (start, end), sent)
+            c.derived, c.relation, c.notes = derived, relation, notes
+            core = text.rstrip(".")
+            idx = sent.find(core)
+            if idx < 0 and core:
+                idx = sent.find(core[0].lower() + core[1:])  # clause start was capitalised
+            if idx >= 0:
+                c.fragment_span = [start + idx, start + idx + len(core)]
+            claims.append(c)
     return claims
 
 

@@ -374,6 +374,10 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     if not c.requires_verification:
         return ClaimReport(c.to_dict(), "NOT_APPLICABLE", None, "not assessed (not time-sensitive or not a verifiable fact)", None, {},
                            f"Not checked: {c.reason}.")
+    if c.verifiability == "incomplete":
+        return ClaimReport(c.to_dict(), "UNVERIFIED", None, "not assessed", None, {"note": "incomplete claim"},
+                           "Not verified: the claim's subject is a pronoun that cannot be resolved within its sentence, so no "
+                           "search was spent and the claim is kept as written.", missing_evidence="claim subject is unresolved")
     q = build_query(c)
     out = search.search(q, include_domains=(preferred or settings.authority_rules.get(c.category) or None), max_results=5)
     retrieved = out.retrieved_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
