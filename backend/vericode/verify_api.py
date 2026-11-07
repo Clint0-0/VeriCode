@@ -112,6 +112,17 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
         r = PyResolver(Path(env.python_site_packages))
         info: SymbolInfo = r.resolve(api.import_path, api.name if api.type != "module" else "")
         f.verification_method.append("static_ast(installed source)")
+        if not info.found and not info.migration_hint and api.type != "module" and "." in api.import_path:
+            # Planners often write a class into the import path ("pydantic.BaseModel" + "model_dump"). Retry with
+            # trailing segments treated as attributes of a shorter module path before declaring NOT_FOUND.
+            parts = api.import_path.split(".")
+            for i in range(len(parts) - 1, 0, -1):
+                alt = r.resolve(".".join(parts[:i]), ".".join(parts[i:] + [api.name]))
+                if alt.found or alt.migration_hint:
+                    alt.resolution_path = [f"import path '{api.import_path}' re-read as module '{'.'.join(parts[:i])}' "
+                                           f"+ attribute '{'.'.join(parts[i:] + [api.name])}'"] + list(alt.resolution_path)
+                    info = alt
+                    break
         if not info.found and not info.migration_hint:
             py = Path(env.root) / ".venv" / "bin" / "python"
             if py.exists():
