@@ -55,6 +55,45 @@ jobs:
       - name: Offline demo suite
         run: scripts/demo.sh offline
 
+  sandbox-image:
+    name: Self-contained sandbox image (build + run sandbox tests in it)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERICODE_LLM_PROVIDER: mock
+      VERICODE_TOKEN_FILE: /tmp/vericode_ci_token
+      VERICODE_SANDBOX_IMAGE: vericode-sandbox:full
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            tools/ts-checker/package-lock.json
+            demos/ts_project/package-lock.json
+      - name: Build the image
+        run: scripts/build_sandbox_image.sh
+      - name: Image contents
+        run: docker run --rm --network none "$VERICODE_SANDBOX_IMAGE" sh -c 'python3 --version && node --version && id -u'
+      - name: Install backend and demo projects
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r backend/requirements.txt
+          python -m venv demos/sample_project/.venv
+          demos/sample_project/.venv/bin/pip install "pydantic==2.9.2" pytest
+          npm ci --prefix tools/ts-checker --no-audit --no-fund
+          npm ci --prefix demos/ts_project --no-audit --no-fund
+      - name: Sandbox tests using the image
+        env:
+          VERICODE_TEST_SANDBOX: docker
+        run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m "not e2e" -k "docker or sandbox or vericode_detects or ts_task" -rs
+
   frontend:
     name: Frontend typecheck, tests, build
     runs-on: ubuntu-latest
