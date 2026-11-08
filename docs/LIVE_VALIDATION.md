@@ -163,9 +163,37 @@ fails on MOCK data, which shows it does not accept mock usage as real.
 
 ## Remaining blockers
 
-| Item | Status | Action |
+| Item | Status (superseded, see the completion round below) | Action |
 |---|---|---|
 | Benchmark `summary` + `signup` on optimised code | BLOCKED (Groq 429, retry-after up to 1417 s) | After the Groq cap resets: Actions -> "Live validation" -> Run workflow on `feat/vericode-live-final` with `only=groq_text,groq_quota,benchmark_actual`, `skip_benchmark=false`, `bench_tasks=summary,signup`, `benchmark_runs=3` |
 | Live confirmation of the chained-member pre-flight fixes | BLOCKED (same) | `only=groq_text,groq_quota,coding_typescript_new` |
 | Anthropic provider live | not possible | no Anthropic key |
 | Groq documentation | not consulted | fetching needed approval; behaviour verified against the real API instead |
+
+---
+
+# Completion round (2026-11-08, commit `18b9c81`)
+
+| Run | Scope | Outcome |
+|---|---|---|
+| [42461511457](https://github.com/Clint0-0/VeriCode/actions/runs/42461511457) | TS task, benchmark `summary` + `signup`, browser | TS task passed; `summary` comparable; `signup` VeriCode 2/3 (one Groq 429); browser 4 passed / 2 skipped (no Track 1 data in this run) |
+| [42462137064](https://github.com/Clint0-0/VeriCode/actions/runs/42462137064) | one re-run of `signup` | **BLOCKED**: 429 with retry-after up to 1,347 s. Not retried again |
+
+**TypeScript/zod task (new): ACTUAL AND SUCCESSFUL.** First pass, 0 repairs, 2 files changed, tests pass, 3,026
+actual tokens (planner 650 in / 503 out; coder 826 in / 1,047 out). Pre-flight: 7/7 planned APIs `VERIFIED_LOCAL`
+(`z.object`, `z.coerce.number`, `z.string`, `z.preprocess`, vitest `describe`/`it`/`expect`), with no false alarms.
+The planner didn't use a chained call in this run, so chained-call resolution (`z.string().nonempty()`,
+`expect().toThrow()`) is verified by regression tests only.
+
+**Benchmark (actual provider usage):**
+
+| Task | Success B / V | First pass B / V | Repairs B / V | Baseline in / out (mean) | VeriCode in / out (mean) | VeriCode planner (mean) | Baseline total | VeriCode total | Savings |
+|---|---|---|---|---|---|---|---|---|---|
+| users | 3/3 / 3/3 | 0/3 / 2/3 | 2.3 / 0.3 | 9,565.7 / 1,070 | 1,464 / 705 | 531 in / 206 out | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** |
+| summary | 3/3 / 3/3 | 2/3 / 3/3 | 0.3 / 0 | 3,438 / 503.3 | 1,499 / 488.7 | 564 in / 80 out | 3,941.3 ± 1,842.6 | 1,987.7 ± 150.4 | **49.6%** |
+| signup | 3/3 / 2/3 | 3/3 / 2/3 | 0 / 0 | 560 / 201 | 881.7 / 312.3 (incl. a 0-token failed run) | about 547 overhead | 761 ± 27 | 1,793 (2 completed runs) | **not computed** (pairs −127%, −136%) |
+
+No judge tokens are counted in coding benchmarks: the evidence judge is a Track 1 component, and the coding pipeline
+makes no judge call. Tavily (external tool usage, counted separately and never as tokens) was called once in total: in one
+`users` VeriCode run, for a documentation fallback. It was not called in `summary` or `signup`, and the baseline never
+calls it.

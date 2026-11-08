@@ -27,8 +27,12 @@ TypeScript tasks, Demo C, Track 1 B/D improvements, Demo E, browser pass over pe
 - Remaining quota is recorded.
 - Optional structured-stage `reasoning_effort`, dropped automatically if the model rejects it.
 
-**Tokens**: compact planner output contract. Actual benchmark, `users` task: 79.6% savings (n=3, both 3/3). The other
-two tasks were blocked by Groq 429.
+**Tokens**: compact planner output contract. Actual benchmark (3 runs per mode): `users` 79.6% savings, `summary`
+49.6% savings, `signup` not computable (one VeriCode run rate-limited; the completed pairs were about −130%). That is
+three small tasks and not a general savings claim.
+
+**Live completion round (`18b9c81`)**: new TypeScript task passed first try (3,026 tokens, 7/7 APIs VERIFIED_LOCAL).
+Chained-call pre-flight is verified by regression tests only. Anthropic is still not live-tested.
 
 **Tooling**: harness quota gate, live truncation probe, `--bench-tasks`; `test_e2e_live.py` (Playwright over live data).
 

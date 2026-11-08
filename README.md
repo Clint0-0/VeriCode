@@ -54,30 +54,32 @@ Track 2 also act as *version-specific evidence* for Track 1 claims about librari
 
 ## Status — what is implemented, tested, live-tested, mocked
 
+Labels: **LOCAL** = implemented and locally tested · **CI** = passes key-free GitHub Actions CI · **LIVE** = verified
+with actual Groq/Tavily requests ([report](docs/LIVE_VALIDATION.md)) · **MOCK** = mock/fake-transport tested only ·
+**BLOCKED** = not yet verified. LIVE always means Groq `openai/gpt-oss-120b` through the OpenAI-compatible adapter
+plus Tavily; **the Anthropic provider has never been live-tested** (no key).
+
 | Capability | Status |
 |---|---|
-| Repository inspection (manifests, lockfiles, installed versions, conventions, relevant files, cache invalidation) | Implemented and tested |
-| Python API verification (static AST: re-exports, `_dynamic_imports`, inherited methods, `@deprecated`, `warnings.warn`, removed kwargs, migration messages) | Implemented and tested against real pydantic 2.9.2 |
-| TypeScript verification via the compiler API (module resolution, exports, members, signatures, generics, `@deprecated`, call type-check) | Implemented and tested against real zod 3.23.8 |
-| Claim extraction: modular clause decomposition (subordinate, relative, coordinated) with exact spans; negation, conditionals, hedging, hypotheticals, opinions, comparisons, units, version ranges, temporal markers, qualifiers, unresolved-subject handling | Implemented and tested (26-case deterministic dataset). LLM extraction implemented; mocked-HTTP tests only |
-| Source authority registry: exact/subdomain matching, impersonation detection, entity matching, primary/secondary/unknown/suspicious tiers | Implemented and tested (offline fixtures incl. impersonation and unrelated official sources) |
-| Semantic verification: lexical + negation | Implemented and tested |
-| LLM evidence judge (quotes must appear verbatim in the source) | **Live-tested** with Groq `openai/gpt-oss-120b`: verbatim quotes accepted, quote-less verdicts discarded ([report](docs/LIVE_VALIDATION.md)) |
-| Provider and Tavily **contract tests** (malformed/empty/missing fields, invalid usage, incomplete streams, 401/429/5xx, timeouts, retry exhaustion, provider switching) | Implemented and tested with fake transports. These are **not** live tests |
-| Tavily search + extract (aligned with the current OpenAPI spec: `include_published_date`, `include_usage`, `include_domains_mode`, 432/433 quota codes) | **Live-tested** in GitHub Actions: search, extract, dates, retrieval timestamps, credits, persistence |
-| Anthropic + OpenAI-compatible providers, structured outputs, retries, timeouts, provider-reported usage | OpenAI-compatible path **live-tested with Groq** (text, structured planner, skeleton, streaming, usage, errors). Anthropic: mocked-HTTP only (no key). Output truncation (`finish_reason=length`) and 429 are handled explicitly |
-| Coding agent on arbitrary tasks (real provider) | **Live with Groq**: new Python task and Demo C passed first try; new TypeScript task failed on planner truncation (fixed, not yet re-confirmed live) |
-| Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, memory/CPU/pids limits, timeout kill) | Implemented and tested (isolation probes, fork bomb, host-file and symlink escape, read-only dependency dirs, TypeScript check in container, cleanup) |
-| Self-contained sandbox image (no host `/usr` mount) | Implemented. Command construction tested; image **build not executed here** (needs a registry pull) |
-| GitHub Actions CI (key-free) | Implemented and **passing on GitHub**: backend 222 + 16 Docker-sandbox tests, offline demo suite, frontend typecheck/tests/build, 6 browser e2e |
-| Local auth: token → HttpOnly SameSite=Strict session + CSRF, Host-header allowlist, refuses non-loopback bind without opt-in | Implemented and tested |
-| Persisted settings + versioned SQLite migrations | Implemented and tested (restart simulation) |
-| Benchmarks: separate measurement classes, paired savings, savings only for comparable successes, flagged-API usage shipped by each mode | Implemented and tested. One **ACTUAL_PROVIDER_USAGE** run on Groq (see below); historical MOCK numbers kept separately |
-| Combined workflow: Track 1 API claims checked against installed packages (Python AST / TS compiler) | Implemented and tested (real pydantic 2.9.2 / zod 3.23.8) |
-| Confidence heatmap (per library × planned API, colours = verification status, plus "auto-corrected" from the final diff) | Implemented and tested (UI + e2e) |
-| Provider streaming (Anthropic SSE, OpenAI `stream_options.include_usage`) for coder/repair, with usage from stream events | OpenAI-compatible streaming **live-tested on Groq**: usage arrives in the stream (ACTUAL, not ESTIMATED) |
-| Per-model cost (user-entered prices; never invented, never for MOCK) | Implemented and tested |
-| Browser end-to-end tests (real server + Chromium): login, Track 1, combined, pre-flight heatmap, coding task, all 8 screens, mobile | Implemented and passing |
+| Repository inspection (manifests, lockfiles, installed versions, conventions, relevant files, cache invalidation) | LOCAL · CI · LIVE (used by every live coding task) |
+| Python API verification (static AST over installed pydantic 2.9.2: re-exports, inherited methods, deprecations, removed kwargs, positional values for `*args`) | LOCAL · CI · LIVE (pre-flight in live Python tasks; the `model_dump` false alarm is gone) |
+| TypeScript verification via the compiler API (exports, namespace members, member paths, chained call results, `@deprecated`, call type-check) | LOCAL · CI · LIVE for exports, namespace members and type-checks (live TS task: 7/7 APIs VERIFIED_LOCAL). Chained-call resolution: LOCAL · CI only (no live plan used a chain since the fix) |
+| Claim extraction (clause decomposition, spans, negation, hedging, hypotheticals, qualifiers) | LOCAL · CI · LIVE (Track 1 scenarios A-D). LLM-based extraction: MOCK |
+| Source authority (exact/subdomain matching, impersonation, entity + product→publisher aliases, tiers) | LOCAL · CI · LIVE |
+| Evidence sufficiency (weak sources never contradict, lexical never overrides stronger evidence, version monotonicity, undated pages can't override dated ones, negation-aware values) | LOCAL · CI · LIVE (scenario B → CONTRADICTED with correction 3.14; scenario D → UNVERIFIED; Demo E fixed) |
+| LLM evidence judge with verbatim-quote validation | LOCAL · CI (fake transports) · LIVE (quotes verified; quote-less verdicts discarded) |
+| Tavily search + extract, dates, retrieval timestamps, credits, persistence | LOCAL · CI (fake transports) · LIVE |
+| OpenAI-compatible provider: text, structured output, streaming usage, truncation detection + bounded retry, error handling, rate-limit waits | LOCAL · CI · LIVE (Groq) |
+| Anthropic provider | LOCAL · CI with fake transports only — **MOCK; never live-tested** |
+| Coding agent on new, non-bundled tasks | LIVE: Python (pydantic v2) passed; TypeScript (zod) passed, last run first-pass with 3,026 tokens; Demo C passed |
+| Actual-token benchmark | LIVE for 3 tasks; savings computable for 2 (see [Measured results](#measured-results-honest)) |
+| Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, limits, timeout kill) | CI (16 Docker tests on GitHub runners). Locally skipped here (no Docker daemon in this build environment) |
+| Self-contained sandbox image (no host `/usr` mount) | LOCAL (command construction only); image build **BLOCKED** here (needs a registry pull) |
+| Local auth (one-time token → HttpOnly session + CSRF, Host allowlist, loopback-only by default) | LOCAL · CI |
+| Persisted settings + versioned SQLite migrations | LOCAL · CI |
+| Confidence heatmap, 8-screen UI | LOCAL · CI (mock-provider browser e2e) · LIVE (Playwright over persisted live results: 6/6 when the run has Track 1 data, 4/4 + 2 skipped otherwise) |
+| Per-model cost (user-entered prices; never invented, never for MOCK) | LOCAL · CI |
+| Historical MOCK benchmark numbers | MOCK (kept separate; never mixed with ACTUAL) |
 
 ## Live configuration (Groq + Tavily, no Anthropic key needed)
 Groq runs through the existing OpenAI-compatible adapter. In `.env` (gitignored, never commit it):
@@ -105,34 +107,32 @@ variables -> Actions), then Actions -> "Live validation (manual, uses API credit
 it never spends credits on a push. Use `only=` to run selected harness sections.
 
 ## Live validation status
-Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Confirmed against real Groq (`openai/gpt-oss-120b`)
-and Tavily:
-- provider config, text, structured planner, skeleton, streaming usage, error handling, truncation detection and
-  bounded retry, and the evidence judge with verbatim quotes;
-- Tavily search and extract;
-- Track 1 scenarios A-D: an outdated "latest version" claim is now CONTRADICTED, and weak-source contradictions are
-  now UNVERIFIED;
-- Demo E (installed code + Tavily);
-- new Python and TypeScript coding tasks, and Demo C;
-- a browser pass over persisted live results (6/6).
-
-Still open: the actual-token benchmark for 2 of 3 tasks, and live confirmation of the last pre-flight fixes. Both are
-blocked by Groq rate limits.
+Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Everything in the status table marked LIVE was run
+against real Groq and Tavily from GitHub Actions. Open items:
+- `signup` savings are not computable: one VeriCode run hit a Groq 429, and the re-run was rate-limited.
+- Chained-call pre-flight is not yet exercised live.
+- Anthropic has never been run live.
 
 ## Measured results (honest)
 
-**Actual provider usage, optimised code (Groq `openai/gpt-oss-120b`, 3 runs per mode, run 42448014676):**
+**Actual provider usage, current code** (Groq `openai/gpt-oss-120b`, 3 runs per mode, same model, repository snapshot,
+repair budget (3) and acceptance tests). Mean ± stdev total tokens per run:
 
-| Task | Success (B/V) | First pass (B/V) | Baseline tokens | VeriCode tokens | Savings |
-|---|---|---|---|---|---|
-| users (pydantic v1 APIs planned) | 3/3 / 3/3 | 0/3 / 2/3 | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** (paired 76.6 / 73.6 / 85.6) |
-| summary, signup | blocked by Groq HTTP 429 | | | | not measured |
+| Task | Success B / V | First pass B / V | Repairs B / V (mean) | Baseline tokens | VeriCode tokens | Savings |
+|---|---|---|---|---|---|---|
+| users (pydantic v1 APIs planned) | 3/3 / 3/3 | 0/3 / 2/3 | 2.3 / 0.3 | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** (pairs 76.6 / 73.6 / 85.6) |
+| summary (no API risk) | 3/3 / 3/3 | 2/3 / 3/3 | 0.3 / 0 | 3,941.3 ± 1,842.6 | 1,987.7 ± 150.4 | **49.6%** (pairs 24.8 / 68.5 / 34.4) |
+| signup (TypeScript zod, 3-file repo) | 3/3 / 2/3 | 3/3 / 2/3 | 0 / 0 | 761 ± 27 | 1,793 avg of the 2 completed runs | **not computed**: one VeriCode run failed on a Groq 429. The 2 completed pairs were **−127% and −136%** |
 
-The saving comes from avoided repairs: the baseline averaged 2.3 repairs, each resending the whole repository.
-VeriCode averaged 0.3, at 733 tokens of planning overhead. That is one task with n=3; no TypeScript savings figure
-exists for the optimised code.
+Runs: users [42448014676](https://github.com/Clint0-0/VeriCode/actions/runs/42448014676); summary and signup
+[42461511457](https://github.com/Clint0-0/VeriCode/actions/runs/42461511457).
 
-**Earlier actual run, pre-optimisation code (run 42397432837):**
+**Reading:** VeriCode saved tokens where the baseline needed repairs. Each baseline repair resends the whole
+repository; VeriCode's planner + pre-flight cost about 550-730 tokens and avoided those repairs. On the tiny `signup`
+task the baseline succeeded first try with about 760 tokens, so VeriCode's overhead roughly doubles the cost. **These
+are three small demo tasks. They are not a general savings claim.**
+
+**Earlier actual run, before the planner optimisation and pre-flight fixes (run 42397432837, superseded):**
 
 | Task | Success (B/V) | Baseline tokens | VeriCode tokens | Savings |
 |---|---|---|---|---|
@@ -175,8 +175,9 @@ A configured real provider that fails returns an error. It never falls back to m
 
 - Live runs so far: Groq (`openai/gpt-oss-120b`) + Tavily in GitHub Actions only; Anthropic never live-tested.
   Groq free-tier rate limits (HTTP 429) cut the last validation run short.
-- Actual-token savings are measured on one task only (79.6%, n=3). On the old code the small TypeScript task cost
-  3.5x more with VeriCode, and it has not been re-measured since the planner optimisation.
+- Actual-token savings are measured on three small demo tasks, computable for two (79.6%, 49.6%). On the smallest task
+  VeriCode costs about 2.3x the baseline. There is no general savings claim.
+- The official problem-statement documents are not in the repository (see `docs/problem-statements/`).
 - Low-authority sources may still *support* a claim (noted in the explanation, low confidence); they can no longer
   contradict one.
 - Groq free-tier limits (8,000 tokens/min plus a longer cap) make full benchmarks slow or blocked; the client waits
@@ -191,3 +192,12 @@ A configured real provider that fails returns an error. It never falls back to m
   (or `node` under its own prefix, which is mounted read-only automatically).
 - Single-user local tool: one access token, no user accounts or roles.
 - Mock coding supports only the 3 bundled tasks. Real-provider mode accepts any task.
+
+## Future work
+- Re-run the `signup` benchmark when the Groq quota allows (`bench_tasks=signup`), and benchmark larger repositories,
+  where avoided repairs should matter more.
+- Skip the planner for tasks that touch no third-party API (the main overhead on tiny tasks).
+- Live-test the Anthropic provider and one more OpenAI-compatible model.
+- Build and publish the self-contained sandbox image.
+- Add the official problem-statement documents and link them from `docs/PROBLEM_STATEMENTS.md`.
+

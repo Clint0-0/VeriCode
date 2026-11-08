@@ -39,3 +39,14 @@ metric makes that visible.
 **Caveat:** with the mock provider, outputs are deterministic and token counts are estimates. The numbers show
 the pipeline mechanics and the context difference only. Report real-model numbers only from runs whose
 `measurement` is `provider-reported usage`.
+
+## Actual results (Groq `openai/gpt-oss-120b`, 3 runs per mode)
+Measured with `python -m vericode.live_validation --only benchmark_actual --bench-tasks ...` in the manual
+"Live validation" workflow. Results and caveats are in [README → Measured results](../README.md#measured-results-honest)
+and [LIVE_VALIDATION.md](LIVE_VALIDATION.md):
+- `users`: 79.6% savings.
+- `summary`: 49.6% savings.
+- `signup`: not computable (one VeriCode run rate-limited); the two completed pairs were about −130%.
+
+Three small demo tasks are not a general savings claim. On a free Groq account, expect HTTP 429 waits: the client
+waits out short per-minute resets and stops on long ones.
