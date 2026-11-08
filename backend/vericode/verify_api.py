@@ -81,7 +81,17 @@ def _doc_domains(dep_path: str | None) -> list[str]:
     return doms[:3]
 
 
+def _strip_module_prefix(api: PlannedAPI) -> PlannedAPI:
+    """Planners sometimes repeat the module in the name ('vitest' + 'vitest.expect.toEqual')."""
+    mod = api.import_path.split("/")[-1].split(".")[-1]
+    if mod and api.name.startswith(mod + ".") and len(api.name) > len(mod) + 1:
+        return api.model_copy(update={"name": api.name[len(mod) + 1:]})
+    return api
+
+
 def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI) -> APIFinding:
+    if pkg.ecosystem == "node":
+        api = _strip_module_prefix(api)
     dep = env.dep(pkg.package)
     installed = dep.installed if dep else None
     f = APIFinding(package=pkg.package, ecosystem=pkg.ecosystem, planned_api=f"{api.import_path}.{api.name}" if pkg.ecosystem == "python" else f"{api.import_path}:{api.name}",

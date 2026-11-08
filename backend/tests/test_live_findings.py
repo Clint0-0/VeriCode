@@ -185,6 +185,8 @@ TS = Path(__file__).resolve().parents[2] / "demos" / "ts_project"
     ("z.coerce.number.min", ["'x'"], "INCOMPATIBLE"),
     ("z.string.nonempty", [], "DEPRECATED"),                   # chain resolution exposes the real deprecation
     ("z.string.bogus", [], "NOT_FOUND"),
+    ("z.ZodSchema.parse", [], "VERIFIED_LOCAL"),       # live: instance method of a class inside a namespace -> NOT_FOUND
+    ("z.ZodSchema.bogus", [], "NOT_FOUND"),
 ])
 def test_ts_namespace_members_and_member_paths(name, args, expected):
     _ts_check("zod", name, args, expected)
@@ -195,6 +197,7 @@ def test_ts_namespace_members_and_member_paths(name, args, expected):
     ("expect.toThrow", [], "VERIFIED_LOCAL"),      # live: member of expect()'s result -> NOT_FOUND
     ("expect.toEqual", ["1"], "VERIFIED_LOCAL"),
     ("expect.toBogus", [], "NOT_FOUND"),
+    ("vitest.expect.toThrow", [], "VERIFIED_LOCAL"),  # live: planner repeated the module name -> NOT_FOUND
 ])
 def test_ts_member_of_call_result_at_root(name, args, expected):
     _ts_check("vitest", name, args, expected)

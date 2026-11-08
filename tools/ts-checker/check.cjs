@@ -142,6 +142,12 @@ async function main() {
       const seg = segs[i]
       prop = i === 0 && instType ? checker.getPropertyOfType(instType, seg) : null
       if (!prop) prop = checker.getPropertyOfType(type, seg) // static / namespace / object member
+      if (!prop && i > 0 && type.getConstructSignatures().length) {
+        // class reached through a namespace (z.ZodSchema.parse): instance member, look on the instance type
+        const inst = checker.getReturnTypeOfSignature(type.getConstructSignatures()[0])
+        const ip = checker.getPropertyOfType(inst, seg)
+        if (ip) { type = inst; prop = ip; out.instance_member = true }
+      }
       if (!prop && (i > 0 || !instType) && type.getCallSignatures().length) {
         // chained API (z.coerce.number().int()): the member lives on the previous call's return type
         const sig0 = type.getCallSignatures()[0]
