@@ -279,9 +279,9 @@ def run_coding(project: str, prompt: str, mode: str = "vericode") -> dict:
 
 
 # ----------------------------------------------------------------------------- 6. benchmark
-def run_bench(runs: int) -> dict:
+def run_bench(runs: int, task_ids: list[str] | None = None) -> dict:
     from .benchmark import run_benchmark
-    b = run_benchmark(runs=runs, live=True)
+    b = run_benchmark(task_ids=task_ids or None, runs=runs, live=True)
     tasks = []
     for t in b["tasks"]:
         s = t["summary"]
@@ -344,6 +344,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--skip-benchmark", action="store_true")
+    ap.add_argument("--bench-tasks", default="", help="comma-separated catalog task ids (default: all)")
     ap.add_argument("--only", default="", help="comma-separated section names to run (config always runs)")
     a = ap.parse_args()
     db.init_db()
@@ -361,7 +362,7 @@ def main() -> int:
               ("coding_typescript_new", lambda: run_coding("ts_project", TS_TASK)),
               ("coding_arbitrary_demoC", lambda: run_coding("sample_project", __import__("vericode.demo", fromlist=["x"]).ARBITRARY_TASK))]
     if not a.skip_benchmark:
-        steps.append(("benchmark_actual", lambda: run_bench(a.runs)))
+        steps.append(("benchmark_actual", lambda: run_bench(a.runs, [x for x in a.bench_tasks.split(",") if x])))
     only = {x.strip() for x in a.only.split(",") if x.strip()}
     if only:
         steps = [(n, f) for n, f in steps if n in only]

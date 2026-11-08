@@ -10,6 +10,10 @@ on:
         description: "Paired benchmark runs (demo 3)"
         default: "3"
         required: true
+      bench_tasks:
+        description: "Benchmark catalog task ids (comma-separated, empty = all)"
+        default: ""
+        required: false
       only:
         description: "Harness sections to run (comma-separated, empty = all)"
         default: ""
@@ -75,7 +79,7 @@ jobs:
       - name: Live validation harness (Groq + Tavily, writes reports/live)
         id: harness
         working-directory: backend
-        run: ../.venv/bin/python -m vericode.live_validation --runs "${{ inputs.benchmark_runs }}" ${{ inputs.skip_benchmark == 'true' && '--skip-benchmark' || '' }} --only "${{ inputs.only }}"
+        run: ../.venv/bin/python -m vericode.live_validation --runs "${{ inputs.benchmark_runs }}" ${{ inputs.skip_benchmark == 'true' && '--skip-benchmark' || '' }} --only "${{ inputs.only }}" --bench-tasks "${{ inputs.bench_tasks }}"
       - name: Upload live report
         if: always()
         uses: actions/upload-artifact@v4
