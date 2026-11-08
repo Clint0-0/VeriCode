@@ -85,9 +85,11 @@ def test_impersonation_never_decides(tmp_path):
 
 def test_official_beats_newer_community_post(tmp_path):
     c = _run(tmp_path, ["official", "community"])
-    # community post is newer but lower authority -> conflict is surfaced, not silently resolved in its favour
-    assert c["status"] == "CONFLICTING_EVIDENCE"
-    assert "authority" in c["conflict"]["reason"]
+    # community post is newer but low authority: it can neither win nor force a conflict against the official source;
+    # it is set aside and the decision says so (policy since 2.3.0 evidence-sufficiency rule)
+    assert c["status"] == "CONTRADICTED" and c["conflict"] is None
+    assert "low-authority supporting source(s) set aside" in c["explanation"]
+    assert all(e["authority_tier"] == "primary" for e in c["evidence"] if e["outcome"] == "contradict")
 
 
 def test_secondary_corroborates_primary(tmp_path):

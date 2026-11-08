@@ -213,6 +213,7 @@ def compare(claim: Claim, excerpt: str) -> tuple[str, str, str | None, str]:
     cv = claim.values
     cov = coverage(claim, excerpt)
     latest_claim = bool(re.search(r"\b(latest|newest|most recent|current)\b", claim.claim, re.I))
+    same_pol = _polarity(claim.claim) == _polarity(excerpt)  # a matching value inside a negated statement is not support
     version_centric = "version" in cv and (claim.category == "software_version" or latest_claim)
     if version_centric:
         evs = ev.get("version", [])
@@ -223,11 +224,11 @@ def compare(claim: Claim, excerpt: str) -> tuple[str, str, str | None, str]:
                 return "contradict", f"source shows newer version {top} than claimed latest {c}", ".".join(top.split(".")[:2]), "value"
             if _version_match(c, evs):
                 return "support", f"source's highest version {top} matches claimed {c}", None, "value"
-        if evs and _version_match(c, evs) and cov >= 0.5:
+        if evs and _version_match(c, evs) and cov >= 0.5 and same_pol:
             return "support", f"source states version {c} in a matching statement ({int(cov * 100)}% term coverage)", None, "value"
     elif "money" in cv:
         evm = ev.get("money", [])
-        if any(m in evm for m in cv["money"]) and cov >= 0.5:
+        if any(m in evm for m in cv["money"]) and cov >= 0.5 and same_pol:
             return "support", f"source states {cv['money'][0]}", None, "value"
         same_cur = [m for m in evm if m.split()[0] == cv["money"][0].split()[0]]
         if same_cur and cov >= 0.5 and not any(m in evm for m in cv["money"]):
@@ -243,7 +244,7 @@ def compare(claim: Claim, excerpt: str) -> tuple[str, str, str | None, str]:
         for key in ("date_range", "percent", "year"):
             if key in cv:
                 evv = ev.get(key, [])
-                if any(v in evv for v in cv[key]) and cov >= 0.5:
+                if any(v in evv for v in cv[key]) and cov >= 0.5 and same_pol:
                     return "support", f"source states {cv[key][0]}", None, "value"
                 if evv and key == "percent" and cov >= 0.5:
                     return "contradict", f"source states {evv[0]}% instead of {cv[key][0]}%", evv[0] + "%", "value"
@@ -347,6 +348,9 @@ def _side(rs: list[EvidenceRecord]) -> list[dict]:
              "source_type": r.source_type, "excerpt": r.excerpt[:300]} for r in rs]
 
 
+STRONG_TIERS = ("primary", "secondary")
+
+
 def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str | None]], preferred: list[str],
                  now: datetime | None = None, origin: str = "live_tavily", judge: bool = False,
                  task_id: str | None = None, ledger: list | None = None, env=None) -> ClaimReport:
@@ -419,7 +423,39 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     con = [r for r in records if r.outcome == "contradict"]
     decisive: list[EvidenceRecord] = []
     correction, conflict, missing = None, None, None
-    if sup and con:
+    notes: list[str] = []
+    status: str | None = None
+    # Evidence sufficiency: only primary/secondary sources (incl. installed code) may contradict a claim. Weak
+    # (unknown/community) sources that disagree with a strong side are set aside; weak-only disagreement is insufficient.
+    strong = lambda r: r.authority_tier in STRONG_TIERS and not r.source_type.startswith("community")
+    con_strong, sup_strong = [r for r in con if strong(r)], [r for r in sup if strong(r)]
+    if con and not con_strong and sup_strong:
+        notes.append(f"{len(con)} low-authority contradicting source(s) set aside: a primary/secondary source supports the claim")
+        con = []
+    elif sup and not sup_strong and con_strong:
+        notes.append(f"{len(sup)} low-authority supporting source(s) set aside: a primary/secondary source contradicts the claim")
+        sup = []
+    weak_only_contra = bool(con) and not con_strong
+    # Version monotonicity: for a "latest/current version" claim, an authoritative source naming a newer released
+    # version disproves it regardless of page dates. Undated pages with an equal/older version cannot do this.
+    newer_version = [r for r in con_strong if r.method == "value" and r.relevance_explanation.find("newer version") >= 0]
+    if weak_only_contra:
+        status = "UNVERIFIED"
+        expl = ("Only low-authority sources (" + ", ".join(sorted({r.domain for r in con})) + ") contradict the claim"
+                + (" and only low-authority sources support it" if sup else "")
+                + "; that is not sufficient to call it contradicted.")
+        missing = "no primary or secondary source settles the claim"
+        conflict = {"supporting": _side(sup), "contradicting": _side(con), "reason": "low-authority sources only"} if sup else None
+        sup = con = []
+        decisive = []
+    elif newer_version:
+        status, decisive = "CONTRADICTED", newer_version
+        expl = ("An authoritative source names a newer version than the claimed latest; versions only move forward, so the "
+                "claim is outdated" + (" (older supporting pages were correct when published)" if sup else "") + ".")
+        sup = con = []
+    if status is not None:
+        pass
+    elif sup and con:
         sd = [parse_date(r.published_date) for r in sup]
         cd = [parse_date(r.published_date) for r in con]
         con_auth, sup_auth = max(r.authority for r in con), max(r.authority for r in sup)
@@ -467,6 +503,10 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
                        else f"no retrieved source discussed {', '.join(c.subject_terms[:4])}")
             if judge_info and judge_info.get("missing_context"):
                 missing += f"; judge: {judge_info['missing_context'][:200]}"
+    if notes:
+        expl += " (" + "; ".join(notes) + ".)"
+    if status == "CURRENT_SUPPORTED" and decisive and not any(r.authority_tier in STRONG_TIERS and not r.source_type.startswith("community") for r in decisive):
+        expl += " Only low-authority sources support it."
     if c.conditional and status in ("CURRENT_SUPPORTED", "CONTRADICTED"):
         expl += " Note: conditional claim - evidence was assessed for the stated condition only."
     if decisive:

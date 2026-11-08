@@ -4,7 +4,7 @@
   "sources": [
     {
       "title": "Acme Cloud pricing (synthetic)",
-      "url": "https://pricing.example.com/acme",
+      "url": "https://acme.example/pricing",
       "published_date": null,
       "synthetic": true,
       "keywords": [
@@ -19,7 +19,7 @@
     },
     {
       "title": "Acme Cloud plans compared (synthetic)",
-      "url": "https://docs.example.org/acme-plans",
+      "url": "https://docs.acme.example/plans",
       "published_date": "2026-09-01",
       "synthetic": true,
       "keywords": [

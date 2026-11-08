@@ -127,6 +127,14 @@ def proper_nouns(claim_text: str) -> set[str]:
     return out
 
 
+# Product names that are published by a differently named organisation (claim mentions the product, the official
+# site carries the publisher's name). Small and explicit on purpose; extend via code review, not heuristics.
+ENTITY_ALIASES = {"chatgpt": {"openai"}, "gpt": {"openai"}, "dalle": {"openai"}, "claude": {"anthropic"},
+                  "gemini": {"google"}, "chrome": {"google"}, "android": {"google"}, "copilot": {"github", "microsoft"},
+                  "windows": {"microsoft"}, "azure": {"microsoft"}, "iphone": {"apple"}, "macos": {"apple"},
+                  "llama": {"meta"}, "aws": {"amazon"}, "cpython": {"python"}}
+
+
 def assess(url: str, preferred: list[str] | None = None, category: str | None = None, claim_text: str = "",
            claim_terms: list[str] | None = None) -> Authority:
     from .tavily import domain_of
@@ -157,6 +165,7 @@ def assess(url: str, preferred: list[str] | None = None, category: str | None = 
             return Authority(0.35, "community/blog (secondary)", "secondary", f"registry:community:{p}",
                              f"{host} is user-generated/community content ({p})")
     entities = proper_nouns(claim_text) | {t.lower() for t in (claim_terms or []) if t[:1].isupper()}
+    entities |= {a for e in list(entities) for a in ENTITY_ALIASES.get(e, ())}
     label = registrable(host).split(".")[0].replace("-", "")
     if label in entities and label not in GENERIC_LABELS and len(label) >= 4:
         return Authority(0.9, "official_entity_site", "primary", f"entity:{label}",
