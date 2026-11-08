@@ -108,4 +108,4 @@ jobs:
           npm ci --prefix frontend --no-audit --no-fund
           npm run build --prefix frontend
       - name: E2E (uses the runner's preinstalled Google Chrome)
-        run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_e2e_ui.py -rs
+        run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_e2e_ui.py backend/tests/test_e2e_states.py -rs
