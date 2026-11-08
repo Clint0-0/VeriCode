@@ -1,6 +1,6 @@
 # Submission checklist
 
-Status as of the head of `feat/vericode-live-final` (see PR #1). Labels: LOCAL · CI · LIVE · MOCK · BLOCKED.
+Status as of `main` (PR #1 merged by fast-forward, `a655be9..91a889b`). Labels: LOCAL · CI · LIVE · MOCK · BLOCKED.
 
 | Item | Status |
 |---|---|
@@ -19,6 +19,6 @@ Status as of the head of `feat/vericode-live-final` (see PR #1). Labels: LOCAL �
 | Anthropic provider | ⚠️ MOCK only (no key) |
 | Browser tests | ✅ CI (mock: 9) · LIVE (persisted live data: 6/6) |
 | Security review | ✅ LOCAL: secret scan of full history, auth coverage, host check, CORS, command allowlist, sandbox, `npm audit`/`pip-audit` clean. Not a formal certification |
-| Local tests, CI | ✅ see PR #1 |
+| Local tests, CI | ✅ LOCAL 265 passed · CI green on `main` |
 | Results and limitations, future work | ✅ [RESULTS_AND_LIMITATIONS.md](RESULTS_AND_LIMITATIONS.md), README |
-| PR #1 up to date, not merged | ✅ awaiting owner approval |
+| PR #1 | ✅ merged into `main` (fast-forward, no force push) |

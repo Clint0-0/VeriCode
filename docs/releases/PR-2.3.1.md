@@ -1,6 +1,6 @@
 # VeriCode 2.3.x — live validation with Groq + Tavily, submission package
 
-Base `main` (`a655be9`) ← head `feat/vericode-live-final` (contains all of `feat/vericode-live-validation`; fast-forward possible). **Do not merge without owner approval.**
+Base `main` (`a655be9`) ← head `feat/vericode-live-final` (contains all of `feat/vericode-live-validation`). **Merged** with owner approval by fast-forward: `main` `a655be9..91a889b`.
 
 ## What this PR adds
 - **Live validation**: `vericode.live_validation` harness plus a manual GitHub Actions workflow.
