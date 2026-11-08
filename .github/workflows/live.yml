@@ -41,6 +41,10 @@ jobs:
       VERICODE_DEMO_MODE: "0"
       VERICODE_LIVE_TESTS: "1"
       VERICODE_TOKEN_FILE: /tmp/vericode_live_token
+      VERICODE_DB: /tmp/vericode_live.db
+      # reasoning_effort for planner/judge/claim-extraction only (coder/repair identical in both benchmark modes);
+      # dropped automatically if the model rejects it
+      VERICODE_STRUCTURED_REASONING_EFFORT: ${{ vars.VERICODE_STRUCTURED_REASONING_EFFORT || 'low' }}
     steps:
       - uses: actions/checkout@v5
       - name: Check credentials present
@@ -61,11 +65,13 @@ jobs:
       - name: Install backend + demo projects
         run: |
           python -m venv .venv
-          .venv/bin/pip install -r backend/requirements.txt
+          .venv/bin/pip install -r backend/requirements-dev.txt
           python -m venv demos/sample_project/.venv
           demos/sample_project/.venv/bin/pip install "pydantic==2.9.2" pytest
           npm ci --prefix tools/ts-checker --no-audit --no-fund
           npm ci --prefix demos/ts_project --no-audit --no-fund
+          npm ci --prefix frontend --no-audit --no-fund
+          npm run build --prefix frontend
       - name: Live validation harness (Groq + Tavily, writes reports/live)
         id: harness
         working-directory: backend
@@ -77,6 +83,11 @@ jobs:
           name: live-report
           path: reports/live/
           if-no-files-found: warn
+      - name: Browser checks over the persisted live results (8 screens)
+        if: always()
+        env:
+          VERICODE_LIVE_DB: /tmp/vericode_live.db
+        run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_e2e_live.py -rs
       - name: Live tests
         if: always()
         run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs

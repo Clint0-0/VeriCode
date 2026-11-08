@@ -111,6 +111,32 @@ def check_text() -> dict:
     return {"status": OK if ok else FAILED, "reply": r.text.strip()[:80], "usage": _usage(r)}
 
 
+def check_quota() -> dict:
+    """Snapshot of provider rate-limit headers from the last call; gate heavy sections when nearly exhausted."""
+    lim = dict(llm.last_rate_limits)
+    rem_req = lim.get("x-ratelimit-remaining-requests")
+    low = rem_req is not None and rem_req.isdigit() and int(rem_req) < settings.live_min_requests
+    return {"status": FAILED if low else OK, "limits": lim,
+            **({"error": f"only {rem_req} requests left in the provider window (< {settings.live_min_requests}); heavy sections skipped"} if low else {})}
+
+
+def check_truncation() -> dict:
+    """Live check of the truncation fix: a deliberately tiny budget must be detected (finish_reason=length) and
+    complete() must escalate once (two ledger entries, both with provider usage)."""
+    prompt = "List the numbers 1 to 200 separated by commas. Output only the list."
+    raw = llm._call(settings.effective_provider(), settings.planner_model, "You follow instructions exactly.", prompt, 48, "planner")
+    ledger: list = []
+    err = None
+    try:
+        llm.complete("You follow instructions exactly.", prompt, stage="planner", max_tokens=48, ledger=ledger)
+    except llm.LLMUnavailable as e:  # acceptable outcome if even the doubled budget is all reasoning
+        err = redact(str(e))[:200]
+    escalated = len(ledger) >= 2 and ledger[0].truncated
+    return {"status": OK if raw.truncated and escalated else FAILED, "detected_truncation": raw.truncated,
+            "escalated_once": escalated, "budgets": [48, 96], "after_escalation_error": err,
+            "usage": [_usage(raw)] + [_usage(r) for r in ledger]}
+
+
 def check_planner() -> dict:
     ledger: list = []
     out = llm.complete_json("You plan small code changes.",
@@ -241,7 +267,9 @@ def run_coding(project: str, prompt: str, mode: str = "vericode") -> dict:
     r = TaskRunner(tid, p, prompt, mode).run()
     pf = db.loads((db.row("SELECT preflight_json FROM tasks WHERE id=?", (tid,)) or {}).get("preflight_json"), {})
     tests = [{"cmd": x.get("cmd") or x.get("name"), "passed": x.get("passed")} for x in (r.get("checks") or {}).get("results", [])][:8]
+    bad_model_dump = [f for f in pf.get("findings", []) if "model_dump" in (f.get("planned_api") or "") and f.get("status") == "NOT_FOUND"]
     return {"status": OK if r.get("success") else FAILED, "task_id": tid, "mode": mode, "outcome": r.get("outcome"),
+            "false_not_found_model_dump": bool(bad_model_dump),
             "first_pass": r.get("first_pass_success"), "repairs": r.get("repair_attempts"),
             "changed_files": r.get("changed_files"), "tests": tests, "tokens": r.get("tokens"),
             "preflight_findings": [{k: f.get(k) for k in ("planned_api", "status", "installed_version", "api_compatibility", "explanation")}
@@ -324,7 +352,7 @@ def main() -> int:
     if S["config"]["status"] == BLOCKED:
         print("BLOCKED:", S["config"].get("error"))
     real = S["config"]["status"] != BLOCKED
-    steps = [("groq_text", check_text), ("groq_planner", check_planner), ("groq_skeleton", check_skeleton),
+    steps = [("groq_text", check_text), ("groq_quota", check_quota), ("groq_truncation", check_truncation), ("groq_planner", check_planner), ("groq_skeleton", check_skeleton),
              ("groq_stream", check_stream), ("groq_error_handling", check_error), ("groq_evidence_judge", check_judge),
              ("tavily", check_tavily)]
     steps += [(f"track1_{n}", lambda n=n, t=t: run_scenario(n, t)) for n, t in SCENARIOS.items()]
@@ -337,8 +365,14 @@ def main() -> int:
     only = {x.strip() for x in a.only.split(",") if x.strip()}
     if only:
         steps = [(n, f) for n, f in steps if n in only]
+    gated = False
     for name, fn in steps:
-        S[name] = _section(fn) if real else {"status": BLOCKED, "error": "provider not configured"}
+        if gated:
+            S[name] = {"status": BLOCKED, "error": "skipped: " + S["groq_quota"]["error"]}
+        else:
+            S[name] = _section(fn) if real else {"status": BLOCKED, "error": "provider not configured"}
+        if name == "groq_quota" and S[name]["status"] == FAILED:
+            gated = True
         print(f"{name:28s} {S[name]['status']:15s} {S[name].get('duration_s', '')}", flush=True)
     S["api_screens"] = _section(check_api, S) if real and (not only or "api_screens" in only) else {"status": BLOCKED if not real else "SKIPPED"}
     print(f"{'api_screens':28s} {S['api_screens']['status']}", flush=True)
