@@ -89,7 +89,8 @@ OPENAI_BASE_URL=https://api.groq.com/openai/v1
 VERICODE_CODER_MODEL=openai/gpt-oss-120b             # any chat model id listed for your Groq account
 VERICODE_PLANNER_MODEL=openai/gpt-oss-120b
 VERICODE_DEMO_MODE=0
-# VERICODE_REASONING_EFFORT=low                      # optional; sent as reasoning_effort only when set
+# VERICODE_STRUCTURED_REASONING_EFFORT=low           # optional; planner/judge/extraction only (dropped if rejected)
+# VERICODE_REASONING_EFFORT=low                      # optional; all stages
 ```
 Commands:
 ```bash
@@ -104,23 +105,40 @@ variables -> Actions), then Actions -> "Live validation (manual, uses API credit
 it never spends credits on a push. Use `only=` to run selected harness sections.
 
 ## Live validation status
-Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Real Groq and Tavily calls succeeded for config,
-text, structured planner, skeleton, streaming, error handling, evidence judge, Tavily search/extract, Track 1
-scenarios A-D, Demo E, a new Python task and Demo C. Still open: the TypeScript task (failed on output truncation;
-fix added, re-run blocked by Groq HTTP 429 rate limits) and a benchmark on the fixed code.
+Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Confirmed against real Groq (`openai/gpt-oss-120b`)
+and Tavily:
+- provider config, text, structured planner, skeleton, streaming usage, error handling, truncation detection and
+  bounded retry, and the evidence judge with verbatim quotes;
+- Tavily search and extract;
+- Track 1 scenarios A-D: an outdated "latest version" claim is now CONTRADICTED, and weak-source contradictions are
+  now UNVERIFIED;
+- Demo E (installed code + Tavily);
+- new Python and TypeScript coding tasks, and Demo C;
+- a browser pass over persisted live results (6/6).
+
+Still open: the actual-token benchmark for 2 of 3 tasks, and live confirmation of the last pre-flight fixes. Both are
+blocked by Groq rate limits.
 
 ## Measured results (honest)
 
-**Actual provider usage (Groq `openai/gpt-oss-120b`, 3 runs per mode, run 42397432837):**
+**Actual provider usage, optimised code (Groq `openai/gpt-oss-120b`, 3 runs per mode, run 42448014676):**
+
+| Task | Success (B/V) | First pass (B/V) | Baseline tokens | VeriCode tokens | Savings |
+|---|---|---|---|---|---|
+| users (pydantic v1 APIs planned) | 3/3 / 3/3 | 0/3 / 2/3 | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** (paired 76.6 / 73.6 / 85.6) |
+| summary, signup | blocked by Groq HTTP 429 | | | | not measured |
+
+The saving comes from avoided repairs: the baseline averaged 2.3 repairs, each resending the whole repository.
+VeriCode averaged 0.3, at 733 tokens of planning overhead. That is one task with n=3; no TypeScript savings figure
+exists for the optimised code.
+
+**Earlier actual run, pre-optimisation code (run 42397432837):**
 
 | Task | Success (B/V) | Baseline tokens | VeriCode tokens | Savings |
 |---|---|---|---|---|
-| users (pydantic v1 APIs planned) | 33% / 100% | 5,449.7 | 4,316.3 | not computed (baseline failures) |
-| summary (no API risk) | 67% / 100% | 2,874 | 2,713.3 | not computed (baseline failure) |
+| users | 33% / 100% | 5,449.7 | 4,316.3 | not computed (baseline failures) |
+| summary | 67% / 100% | 2,874 | 2,713.3 | not computed (baseline failure) |
 | signup (TypeScript zod) | 100% / 100% | 776.7 | 2,721 | **-250.3%** |
-
-VeriCode finished every run; the baseline failed 3 of 9. Where both always succeeded, VeriCode cost 3.5x the tokens.
-No positive actual-token savings figure has been measured yet.
 
 **Historical MOCK benchmark (scripted provider, chars/4 - mechanics only, not comparable with the table above):**
 
@@ -157,12 +175,12 @@ A configured real provider that fails returns an error. It never falls back to m
 
 - Live runs so far: Groq (`openai/gpt-oss-120b`) + Tavily in GitHub Actions only; Anthropic never live-tested.
   Groq free-tier rate limits (HTTP 429) cut the last validation run short.
-- Measured actual-token cost is **higher** with VeriCode on the small demo repositories; its value shown so far is
-  reliability (9/9 vs 6/9 successes), not token savings.
-- Track 1 can return `CONFLICTING_EVIDENCE` instead of `CONTRADICTED` for an outdated "latest version" claim when an
-  old official page supports the old value and the newer page is undated (recency cannot decide undated sources).
-- The LLM judge can decide a claim from an `unknown`-tier source when its quote is verbatim; confidence stays low
-  (33-51 in the live run), but the status is still decisive.
+- Actual-token savings are measured on one task only (79.6%, n=3). On the old code the small TypeScript task cost
+  3.5x more with VeriCode, and it has not been re-measured since the planner optimisation.
+- Low-authority sources may still *support* a claim (noted in the explanation, low confidence); they can no longer
+  contradict one.
+- Groq free-tier limits (8,000 tokens/min plus a longer cap) make full benchmarks slow or blocked; the client waits
+  out short resets and stops on long ones.
 - The sentence splitter treats a sentence that starts with a lowercase word (e.g. "zod provides ...") as part of
   the previous sentence.
 - The deterministic claim splitter handles common English structures. Complex rhetoric needs the optional LLM

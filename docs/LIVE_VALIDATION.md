@@ -63,3 +63,109 @@ rate-limited.
 | Benchmark with per-stage splits on fixed code | BLOCKED (Groq 429) | Same workflow, `only=benchmark_actual`, `skip_benchmark=false`, `benchmark_runs=3`. Expect roughly 60-120k tokens |
 | Groq docs not consulted during this run | not done (fetch needed approval) | Behaviour was verified empirically against the real API instead |
 | Browser (Playwright) pass over real persisted data | not done | API layer behind every screen was checked live; e2e still runs on mock data in key-free CI |
+
+---
+
+# Final live round (branch `feat/vericode-live-final`, 2026-11-08)
+
+Account limits seen in Groq's response headers: **8,000 tokens/minute**, 1,000 requests per window, and a longer
+token cap. That cap is not shown in the headers, but it returned `retry-after` 160-1417 s while the per-minute bucket
+was full. Every run below used real Groq (`openai/gpt-oss-120b`) and Tavily calls from GitHub Actions.
+
+| Run | Commit | Scope | Outcome |
+|---|---|---|---|
+| [42446934192](https://github.com/Clint0-0/VeriCode/actions/runs/42446934192) | `222b1a8` | provider probes, Tavily, Track 1 A-D, Demo E, 3 coding tasks, browser | probes/Tavily/Track 1 OK; coding tasks hit 429 because of a wait-logic bug (fixed in `d27a59a`); browser 5/6 (test picked a task with no tokens; fixed) |
+| [42447446549](https://github.com/Clint0-0/VeriCode/actions/runs/42447446549) | `d27a59a` | Track 1 B/D, Demo E, 3 coding tasks, browser | **all ACTUAL_SUCCESS**, browser **6/6** |
+| [42448014676](https://github.com/Clint0-0/VeriCode/actions/runs/42448014676) | `44e47ac` | TS task, benchmark (3 tasks x 3 runs x 2 modes) | TS task passed; benchmark: 1 comparable task, the other 2 blocked by 429 |
+| [42448651287](https://github.com/Clint0-0/VeriCode/actions/runs/42448651287) | `4bcbaa1` | TS task, benchmark summary+signup | **BLOCKED**: 429 `retry-after 610s` with a full per-minute bucket. Stopped as designed; browser 6/6 on persisted data |
+
+## Priority 1 - live fixes
+
+| Item | Result | Evidence |
+|---|---|---|
+| `pydantic.BaseModel.model_dump` import-path fix | ACTUAL AND SUCCESSFUL | no false NOT_FOUND in any live Python pre-flight (`false_not_found_model_dump: false`, runs 42446934192 and 42447446549) |
+| Truncation detection + bounded retry | ACTUAL AND SUCCESSFUL | live probe: 48-token budget -> `finish_reason=length` detected, one escalation to 96, both calls counted with provider usage |
+| TypeScript/zod task (new) | ACTUAL AND SUCCESSFUL | run 42447446549: first pass, 0 repairs, 4,097 tokens; run 42448014676: passed after 1 repair, 6,503 tokens |
+| Python task (new, pydantic v2) | ACTUAL AND SUCCESSFUL | run 42447446549: passed after 2 repairs, 5,654 tokens (planner 838 / coder 2,084 / repair 2,732) |
+| Demo C (arbitrary) | ACTUAL AND SUCCESSFUL | run 42447446549: first pass, 2,800 tokens |
+
+Further pre-flight false alarms surfaced by these live runs, all fixed with regressions:
+- `field_serializer('due')`: positional values were read as unknown keyword names.
+- `z.object(...)` / `z.coerce.number`: namespace-object members and member paths were not resolved.
+- An empty argument list was type-checked as a zero-argument call.
+- Chained members (`z.coerce.number().int()`, `expect().toThrow()`) were not resolved; resolving them now also
+  exposes the real `z.string().nonempty()` deprecation.
+
+**The chained-member fixes (`de06c7c`, `ccb2482`) have not yet been confirmed live** (run 42448651287 was blocked).
+
+## Priority 2 - Track 1 accuracy (live)
+
+| Scenario | Before | After (runs 42446934192 / 42447446549) |
+|---|---|---|
+| B "latest stable Python is 3.10" | CONFLICTING_EVIDENCE | **CONTRADICTED**, correction **3.14**, from an authoritative page naming a newer version. Older 2020/2021 python.org pages are kept as "correct when published" |
+| B pydantic "major version 1 / .dict()" | UNVERIFIED | UNVERIFIED (judge: insufficient); unchanged and honest |
+| D "Rust will replace C by 2030" | CONTRADICTED (unknown-tier source, conf 43) | **UNVERIFIED**: only low-authority sources contradict it |
+| D "PSF removes the GIL by 2027" | CONTRADICTED (unknown-tier, conf 34) | **UNVERIFIED** |
+| Demo E `@validator` | CONFLICTING (installed code vs a lexical docs match) | **CONTRADICTED** by installed pydantic 2.9.2 |
+| Demo E `BaseModel.model_dump()` | CONFLICTING | **CURRENT_SUPPORTED** (installed code + docs) |
+| A, C | supported | unchanged; C still accepts low-authority support and says so in the explanation |
+
+Rules added:
+- Only primary/secondary, non-community sources may contradict a claim.
+- A weak side is set aside against a strong side, and a disagreement between weak sources only is UNVERIFIED.
+- A lexical match never overrides value, installed-code or judged evidence.
+- Version monotonicity applies to "latest version" claims.
+- An undated page with an equal or older value never overrides dated evidence.
+- A value inside a negated sentence is not support.
+- Product names map to their publisher (ChatGPT -> openai).
+
+## Priority 3 - tokens (actual provider usage)
+
+Changes:
+- Compact planner output contract (planner output fell from 532 to 168-511 tokens per call in live runs).
+- Optional `reasoning_effort` (`low` in the live workflow) for planner, judge and extraction only. The coder and
+  repair settings are identical in both modes.
+- The truncation retry now counts the truncated call.
+
+Prompt context was already small; repairs were already targeted. No task, test or success criterion was changed.
+
+**Run 42448014676, `users` task, 3 runs per mode, same model, snapshot, repair budget (3) and acceptance tests:**
+
+| | Baseline | VeriCode |
+|---|---|---|
+| Final success | 3/3 | 3/3 |
+| First-pass success | 0/3 | 2/3 |
+| Repairs (mean) | 2.3 | 0.3 |
+| Input tokens (mean) | 9,565.7 | 1,464 |
+| Output tokens (mean) | 1,070 | 705 |
+| **Total tokens (mean ± sd)** | **10,635.7 ± 3,717.1** | **2,169 ± 725.1** |
+| Planning/verification overhead | 0 | 733 (planner 531 in / 206 out) |
+| Duration (mean) | 57.6 s | 14.7 s |
+
+**Token savings: 79.6%** (paired runs: 76.6%, 73.6%, 85.6%). The saving comes from avoided repairs: the baseline
+resends the whole repository on each repair. This is **one task, n=3**. `summary` and `signup` (the TypeScript task
+where the old code measured -250.3%) could not be re-measured on the optimised code because of 429s, so **no
+TypeScript savings figure exists for the new code**.
+
+## Priority 4 - browser over live data
+
+`backend/tests/test_e2e_live.py` serves a copy of the live run's database and checks the screens in Chromium.
+Expected values (analysis ids, live Tavily domains, task ids) are read from that database.
+- Dashboard and token analytics show `ACTUAL_PROVIDER_USAGE`.
+- The stale detector shows the live claim, status, source mode and the exact confidence index.
+- The evidence explorer lists `live_tavily` sources from the DB.
+- Task history and the pre-flight detail show actual usage.
+- Workspace, pre-flight and settings render.
+- No key appears in any API response, the page or the server log.
+
+Result: **6/6 passed** in runs 42447446549 and 42448651287 (5/6 in 42446934192 before a test fix). The same test
+fails on MOCK data, which shows it does not accept mock usage as real.
+
+## Remaining blockers
+
+| Item | Status | Action |
+|---|---|---|
+| Benchmark `summary` + `signup` on optimised code | BLOCKED (Groq 429, retry-after up to 1417 s) | After the Groq cap resets: Actions -> "Live validation" -> Run workflow on `feat/vericode-live-final` with `only=groq_text,groq_quota,benchmark_actual`, `skip_benchmark=false`, `bench_tasks=summary,signup`, `benchmark_runs=3` |
+| Live confirmation of the chained-member pre-flight fixes | BLOCKED (same) | `only=groq_text,groq_quota,coding_typescript_new` |
+| Anthropic provider live | not possible | no Anthropic key |
+| Groq documentation | not consulted | fetching needed approval; behaviour verified against the real API instead |

@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.3.1 — final live round (`feat/vericode-live-final`)
+**Confirmed live (Groq + Tavily)**: model_dump import-path fix, truncation detection + bounded retry, new Python and
+TypeScript tasks, Demo C, Track 1 B/D improvements, Demo E, browser pass over persisted live results (6/6).
+
+**Track 1**
+- Evidence sufficiency: only primary/secondary, non-community sources may contradict a claim. A weak side is set
+  aside against a strong side, and disagreement between weak sources only is UNVERIFIED.
+- A lexical match never overrides value, installed-code or judged evidence.
+- Version monotonicity: an authoritative source naming a newer version contradicts a "latest version" claim
+  regardless of dates. An undated page with an equal or older value cannot override dated evidence.
+- A value inside a negated sentence is no longer support.
+- Product -> publisher aliases (ChatGPT -> openai, Claude -> anthropic, ...).
+
+**Pre-flight (false alarms found live)**
+- Python: positional values for `*args` APIs (`field_serializer('due')`).
+- TypeScript:
+  - namespace-object members and member paths (`z.object`, `z.coerce.number`);
+  - chained call results (`z.coerce.number().int()`, `expect().toThrow()`), with the chained call type-checked;
+  - no zero-argument check when no arguments were planned;
+  - planner-side identifiers count as uncertain, not INCOMPATIBLE.
+
+**Providers**
+- Rate limits: `retry-after` wins; short resets are waited out (bounded), long ones stop immediately with the
+  provider's limits.
+- Remaining quota is recorded.
+- Optional structured-stage `reasoning_effort`, dropped automatically if the model rejects it.
+
+**Tokens**: compact planner output contract. Actual benchmark, `users` task: 79.6% savings (n=3, both 3/3). The other
+two tasks were blocked by Groq 429.
+
+**Tooling**: harness quota gate, live truncation probe, `--bench-tasks`; `test_e2e_live.py` (Playwright over live data).
+
 ## 2.3.0 — live validation (`feat/vericode-live-validation`)
 **Live (Groq via OpenAI-compatible adapter + Tavily, run in GitHub Actions; details in docs/LIVE_VALIDATION.md)**
 - New `vericode.live_validation` harness: config/model availability, text, structured planner, API skeleton,
