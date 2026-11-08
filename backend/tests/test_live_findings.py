@@ -84,3 +84,34 @@ def test_rate_limit_reported_clearly(openai_groq):
     h = lambda req: httpx.Response(429, headers={"retry-after": "37"}, json={})
     with pytest.raises(llm.LLMUnavailable, match=r"rate limited \(HTTP 429\).*retry after 37s"):
         llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))
+
+
+def test_duration_parsing():
+    assert llm._duration("7.66s") == pytest.approx(7.66)
+    assert llm._duration("1m2.5s") == pytest.approx(62.5)
+    assert llm._duration("450ms") == pytest.approx(0.45)
+    assert llm._duration("20") == 20 and llm._duration(None) is None and llm._duration("soon") is None
+
+
+def test_short_rate_limit_is_waited_out_then_succeeds(openai_groq, monkeypatch):
+    slept, n = [], []
+    monkeypatch.setattr("time.sleep", lambda s: slept.append(s))
+
+    def h(req):
+        n.append(1)
+        if len(n) < 3:
+            return httpx.Response(429, headers={"x-ratelimit-reset-tokens": "12.5s"}, json={})
+        return httpx.Response(200, headers={"x-ratelimit-remaining-tokens": "7000"},
+                              json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                                    "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+    r = llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))
+    assert r.text == "ok" and len(n) == 3 and slept == [13.0, 13.0]
+    assert llm.last_rate_limits["x-ratelimit-remaining-tokens"] == "7000"
+
+
+def test_long_rate_limit_stops_immediately_with_limits(openai_groq):
+    n = []
+    h = lambda req: (n.append(1), httpx.Response(429, headers={"retry-after": "3600", "x-ratelimit-limit-tokens": "200000"}, json={}))[1]
+    with pytest.raises(llm.LLMUnavailable, match=r"retry after 3600s.*x-ratelimit-limit-tokens"):
+        llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))
+    assert len(n) == 1  # no repeated hammering against a daily cap

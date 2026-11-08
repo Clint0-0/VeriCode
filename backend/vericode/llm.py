@@ -14,6 +14,7 @@ Model ids are never hardcoded. A failing real provider raises LLMUnavailable - i
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from typing import TypeVar
@@ -286,6 +287,41 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         resp.close()
 
 
+RATE_HEADERS = ("x-ratelimit-limit-requests", "x-ratelimit-remaining-requests", "x-ratelimit-reset-requests",
+                "x-ratelimit-limit-tokens", "x-ratelimit-remaining-tokens", "x-ratelimit-reset-tokens", "retry-after")
+last_rate_limits: dict = {}
+
+
+def _duration(v: str | None) -> float | None:
+    """Parse provider reset values: '20', '7.66s', '1m2.5s', '2h3m', '450ms'."""
+    if not v:
+        return None
+    v = v.strip()
+    try:
+        return float(v)
+    except ValueError:
+        pass
+    total, found = 0.0, False
+    for num, unit in re.findall(r"([\d.]+)(ms|h|m|s)", v):
+        found = True
+        total += float(num) * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
+    return total if found else None
+
+
+def _note_limits(headers) -> None:
+    got = {h: headers.get(h) for h in RATE_HEADERS if headers.get(h) is not None}
+    if got:
+        last_rate_limits.clear()
+        last_rate_limits.update(got)
+
+
+def _rate_wait(resp) -> float | None:
+    """Seconds the provider asks us to wait after a 429 (largest of retry-after / reset headers)."""
+    vals = [_duration(resp.headers.get(h)) for h in ("retry-after", "x-ratelimit-reset-tokens", "x-ratelimit-reset-requests")]
+    vals = [x for x in vals if x is not None]
+    return max(vals) if vals else None
+
+
 def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,
           transport: httpx.BaseTransport | None = None) -> LLMResult:
     last: Exception | None = None
@@ -293,7 +329,8 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
     key = {"anthropic": settings.anthropic_api_key, "openai": settings.openai_api_key}.get(provider)
     if provider in ("anthropic", "openai") and not key:  # fail fast: no network/TLS setup without credentials
         raise LLMUnavailable(f"{provider.upper()}_API_KEY not set")
-    for attempt in range(3):
+    attempt, rl_waits = 0, 0
+    while attempt < 3:
         try:
             with httpx.Client(transport=transport, timeout=timeout) as client:
                 if settings.llm_stream and stage in ("coder", "repair") and provider in ("anthropic", "openai"):
@@ -340,6 +377,7 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=resp.request, response=resp)
                     if resp.status_code >= 400:
                         raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
+                    _note_limits(resp.headers)
                     d = resp.json()
                     text = d["choices"][0]["message"].get("content") or ""
                     finish = d["choices"][0].get("finish_reason")
@@ -352,15 +390,27 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                 raise LLMUnavailable(f"unknown provider {provider}")
         except (httpx.TransportError, httpx.HTTPStatusError) as e:
             last = e
-            if attempt < 2:
-                ra = getattr(getattr(e, "response", None), "headers", {}).get("retry-after") if isinstance(e, httpx.HTTPStatusError) else None
-                time.sleep(min(float(ra), 20) if ra and ra.replace(".", "").isdigit() else 2 ** attempt)
+            r = getattr(e, "response", None) if isinstance(e, httpx.HTTPStatusError) else None
+            if r is not None and r.status_code == 429:
+                _note_limits(r.headers)
+                w = _rate_wait(r)
+                # short reset (per-minute limits): wait it out, bounded; long reset (daily cap): stop now, report it
+                if w is not None and w <= settings.rate_limit_max_wait and rl_waits < settings.rate_limit_max_waits:
+                    rl_waits += 1
+                    time.sleep(w + 0.5)
+                    continue
+                break
+            attempt += 1
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))
         except (KeyError, ValueError) as e:
             raise LLMUnavailable(f"{provider}: unexpected response format: {e}")
     resp = getattr(last, "response", None)
     if resp is not None and resp.status_code == 429:
-        ra = resp.headers.get("retry-after")
+        w = _rate_wait(resp)
+        lim = {k: resp.headers.get(k) for k in RATE_HEADERS if resp.headers.get(k) is not None}
         raise LLMUnavailable(f"{provider}: rate limited (HTTP 429) after retries"
-                             + (f"; provider asks to retry after {ra}s" if ra else "")
+                             + (f"; provider asks to retry after {w:g}s" if w is not None else "")
+                             + (f"; limits {lim}" if lim else "")
                              + ". Account quota or per-minute limit reached; wait and re-run.")
     raise LLMUnavailable(f"LLM call failed after retries: {redact(str(last))}")
