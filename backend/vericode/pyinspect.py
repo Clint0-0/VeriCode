@@ -394,9 +394,12 @@ except Exception as e:
 
 
 def runtime_introspect(python_exe: Path, module: str, qualname: str, timeout: int = 10) -> dict:
-    """Isolated runtime check: separate process, -I (isolated mode), scrubbed env, timeout."""
+    """Isolated runtime check: separate process, -I (isolated mode), scrubbed env, timeout, and no network
+    (user+net namespace) where `unshare -rn` works."""
+    from .security import network_isolation_available
+    prefix = ["unshare", "-rn"] if network_isolation_available() else []  # no network for imported package code when supported
     try:
-        p = subprocess.run([str(python_exe), "-I", "-c", RUNTIME_SCRIPT, module, qualname],
+        p = subprocess.run(prefix + [str(python_exe), "-I", "-c", RUNTIME_SCRIPT, module, qualname],
                            capture_output=True, text=True, timeout=timeout,
                            env={"PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
         return json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {"found": False, "error": p.stderr[-300:]}

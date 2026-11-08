@@ -232,3 +232,13 @@ def test_benchmark_quota_stop_is_blocked_not_failed(monkeypatch, errs, expected)
     out = live_validation.run_bench(3)
     assert out["status"] == expected
     assert out["tasks"][0]["status"] == {"ACTUAL_SUCCESS": "COMPARABLE", "BLOCKED": "BLOCKED_BY_QUOTA", "ACTUAL_FAILED": "FAILED"}[expected]
+
+
+def test_runtime_introspection_has_no_network(tmp_path, monkeypatch):
+    import subprocess
+    from vericode import pyinspect, security
+    seen = []
+    monkeypatch.setattr(security, "_NET_ISOLATION", True)
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **k: (seen.append(cmd), subprocess.CompletedProcess(cmd, 0, '{"found": true}', ""))[1])
+    assert pyinspect.runtime_introspect(tmp_path / "python", "m", "f")["found"]
+    assert seen[0][:2] == ["unshare", "-rn"]
