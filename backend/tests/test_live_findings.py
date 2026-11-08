@@ -242,3 +242,21 @@ def test_runtime_introspection_has_no_network(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda cmd, **k: (seen.append(cmd), subprocess.CompletedProcess(cmd, 0, '{"found": true}', ""))[1])
     assert pyinspect.runtime_introspect(tmp_path / "python", "m", "f")["found"]
     assert seen[0][:2] == ["unshare", "-rn"]
+
+
+@pytest.mark.skipif(not (TS / "node_modules" / "zod").is_dir(), reason="ts_project dependencies not installed")
+def test_task_named_local_identifier_not_reported_as_missing_package_api():
+    """Live chained-call run: planner listed 'RegistrationSchema.parse' under zod; it is the schema the task creates."""
+    from vericode.repo_intel import inspect_project
+    from vericode.skeleton import PlannedAPI, PlannedPackage, Skeleton
+    from vericode.verify_api import verify_skeleton
+    env = inspect_project(TS)
+    apis = [PlannedAPI(import_path="zod", name="RegistrationSchema.parse", type="method", arguments=[]),
+            PlannedAPI(import_path="zod", name="createValidator", type="function", arguments=[]),  # hallucinated, not in task
+            PlannedAPI(import_path="zod", name="z.coerce.number.int", type="function", arguments=[])]
+    sk = Skeleton(packages=[PlannedPackage(package="zod", ecosystem="node", assumed_version="3.23", planned_apis=apis)])
+    task = "Create src/registration.ts exporting a zod schema RegistrationSchema and register(input)."
+    st = {f.planned_api: f.status for f in verify_skeleton(env, sk, None, live=False, task=task)}
+    assert st["zod:RegistrationSchema.parse"] == "UNCERTAIN"
+    assert st["zod:createValidator"] == "NOT_FOUND"
+    assert st["zod:z.coerce.number.int"] == "VERIFIED_LOCAL"

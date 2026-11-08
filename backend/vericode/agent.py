@@ -269,7 +269,7 @@ class TaskRunner:
                 sk, sk_errors = generate_skeleton(self.prompt, deps_summary(env), sk_text_ctx, self.task_id, self.ledger)
                 self.event("skeleton", f"API skeleton: {sum(len(p.planned_apis) for p in sk.packages)} planned APIs",
                            {"skeleton": sk.model_dump(), "validation_errors": sk_errors})
-                findings = [f.to_dict() for f in verify_skeleton(env, sk, self.tavily, live=self.live)]
+                findings = [f.to_dict() for f in verify_skeleton(env, sk, self.tavily, live=self.live, task=self.prompt)]
                 rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
                 self.event("verify", f"Verified {len(findings)} APIs", {"statuses": [f["status"] for f in findings]})
                 briefing = build_briefing(findings)

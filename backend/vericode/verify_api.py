@@ -321,11 +321,32 @@ def live_verify(finding: APIFinding, env: ProjectEnvironment, client: TavilyClie
         finding.explanation += " Official documentation mentions this API (live evidence)."
 
 
-def verify_skeleton(env: ProjectEnvironment, sk: Skeleton, client: TavilyClient | None = None, live: bool = True) -> list[APIFinding]:
+def _task_local_identifier(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f: APIFinding, task: str) -> bool:
+    """A planner sometimes lists an identifier the task itself asks to create (e.g. 'RegistrationSchema.parse' under
+    zod). If the top-level name is not a package export AND appears in the task text, it is project-local code, not a
+    hallucinated package API. Hallucinated exports that the task does not mention stay NOT_FOUND."""
+    if f.status != "NOT_FOUND" or not task:
+        return False
+    top = api.name.split(".")[0]
+    if not top or not re.search(rf"\b{re.escape(top)}\b", task):
+        return False
+    probe = verify_planned_api(env, pkg, PlannedAPI(import_path=api.import_path, name=top, type="class", arguments=[]))
+    return probe.status == "NOT_FOUND"
+
+
+def verify_skeleton(env: ProjectEnvironment, sk: Skeleton, client: TavilyClient | None = None, live: bool = True,
+                    task: str = "") -> list[APIFinding]:
     findings = []
     for pkg in sk.packages:
         for api in pkg.planned_apis:
             f = verify_planned_api(env, pkg, api)
+            if _task_local_identifier(env, pkg, api, f, task):
+                f.status = "UNCERTAIN"
+                f.verification_confidence = "medium"
+                f.explanation = (f"'{api.name.split('.')[0]}' is not exported by {pkg.package} but is named in the task as "
+                                 "code to write; treated as a project-local identifier, not a package API.")
+                findings.append(f)
+                continue
             if live and client is not None and (f.status not in ("VERIFIED_LOCAL",) or api.version_sensitive):
                 live_verify(f, env, client)
             findings.append(f)

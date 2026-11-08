@@ -48,6 +48,8 @@ jobs:
       VERICODE_DB: /tmp/vericode_live.db
       # reasoning_effort for planner/judge/claim-extraction only (coder/repair identical in both benchmark modes);
       # dropped automatically if the model rejects it
+      # unattended run: wait out provider resets up to 3 min (Groq free tier), stop on longer ones
+      VERICODE_RATE_LIMIT_MAX_WAIT: "180"
       VERICODE_STRUCTURED_REASONING_EFFORT: ${{ vars.VERICODE_STRUCTURED_REASONING_EFFORT || 'low' }}
     steps:
       - uses: actions/checkout@v5

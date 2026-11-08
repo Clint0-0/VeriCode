@@ -232,7 +232,7 @@ def preflight(req: PreflightReq):
     sel = select_relevant_files(env, req.task)
     sk, errs = generate_skeleton(req.task, agent.deps_summary(env), agent.outline(env, [s["path"] for s in sel]), tid, ledger)
     client = TavilyClient()
-    findings = [f.to_dict() for f in verify_skeleton(env, sk, client, live=req.live)]
+    findings = [f.to_dict() for f in verify_skeleton(env, sk, client, live=req.live, task=req.task)]
     rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
     res = {"selected_files": sel, "skeleton": sk.model_dump(), "skeleton_errors": errs, "findings": findings,
            "briefing": agent.build_briefing(findings), "tokens": agent.summarize_ledger(ledger),
