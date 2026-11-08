@@ -55,7 +55,7 @@ tokens, and that overhead roughly doubles the cost. Three small demo tasks are *
 - Low-authority sources can still *support* a claim (noted, low confidence).
 - The process sandbox fallback is weaker than Docker. It is labelled per run, and network isolation is present only
   where `unshare -rn` works. For hostile repositories, use Docker or a VM.
-- The self-contained sandbox image was not built in this environment.
+- The self-contained sandbox image is built and tested in CI (`sandbox-image` job, 16 sandbox tests), but is not published to a registry. Build it locally with `scripts/build_sandbox_image.sh`.
 
 ## Future work
 - More LLM providers live-tested (Anthropic, others via the OpenAI-compatible adapter).

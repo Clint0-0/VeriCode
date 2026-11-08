@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.4 — sandbox image in CI
+- **CI**: new `sandbox-image` job builds `docker/sandbox.Dockerfile` and runs the sandbox tests inside it (16 passed).
+  The image is still not published to a registry.
+
 ## 2.3.3 — signup benchmark completed
 - **LIVE** (run 42491474776, `38ff1f5`): `signup` 3 + 3, both modes 3/3 first pass. Baseline 767.3 tokens, VeriCode
   1,838.3 tokens: **−139.6%**. VeriCode costs more on this tiny task; the docs say so. Replaces the BLOCKED status.

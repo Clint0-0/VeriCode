@@ -87,7 +87,7 @@ plus Tavily; **the Anthropic provider has never been live-tested** (no key).
 | Coding agent on new, non-bundled tasks | LIVE: Python (pydantic v2) passed; TypeScript (zod) passed first try (3,026 tokens); chained-call TypeScript task passed first try (2,811 tokens); Demo C passed |
 | Actual-token benchmark | LIVE for 3 tasks; savings computable for 2 (see [Measured results](#measured-results-honest)) |
 | Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, limits, timeout kill) | CI (16 Docker tests on GitHub runners). Locally skipped here (no Docker daemon in this build environment) |
-| Self-contained sandbox image (no host `/usr` mount) | LOCAL (command construction only); image build **BLOCKED** here (needs a registry pull) |
+| Self-contained sandbox image (no host `/usr` mount) | CI: image builds on GitHub Actions and the 16 sandbox tests pass inside it (job `sandbox-image`). Not built in the author's workspace (no registry access); not published to a registry |
 | Local auth (one-time token → HttpOnly session + CSRF, Host allowlist, loopback-only by default) | LOCAL · CI |
 | Persisted settings + versioned SQLite migrations | LOCAL · CI |
 | Confidence heatmap, 8-screen UI | LOCAL · CI (mock-provider browser tests: flows, 8 screens, mobile, empty states, error states, mock labelling, 9 tests) · LIVE (Playwright over persisted live results: 6/6 when the run has Track 1 data, 4 passed + 2 skipped otherwise) |
@@ -209,5 +209,5 @@ A configured real provider that fails returns an error. It never falls back to m
 - More package ecosystems (Go, Rust, Java), stronger semantic claim verification, more evidence providers.
 - Skip the planner for tasks that touch no third-party API (the main overhead on tiny tasks).
 - Live-test the Anthropic provider and one more OpenAI-compatible model.
-- Build and publish the self-contained sandbox image.
+- Publish the self-contained sandbox image to a registry (CI already builds and tests it).
 
