@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.2 — final completion round
+- **LIVE**: a chained-call TypeScript task passed first try (2,811 tokens), with 8 chained zod/vitest APIs resolved
+  by pre-flight through call return types.
+- Pre-flight false alarms found live and fixed (LOCAL · CI):
+  - identifiers the task asks to create (`RegistrationSchema.parse`) are UNCERTAIN, not NOT_FOUND;
+  - instance members of classes inside a namespace (`z.ZodSchema.parse`);
+  - planner names that repeat the module (`vitest.expect.toThrow`).
+- Live harness:
+  - `coding_typescript_chain` section;
+  - quota-stopped runs and benchmarks are BLOCKED, not FAILED;
+  - the live workflow waits out resets up to 180 s.
+- Security: runtime introspection, which imports installed package code on the host, now runs without network
+  (`unshare -rn`) where supported. History secret scan, `npm audit` and `pip-audit` are clean.
+- Browser: new tests for empty states, error states and mock labelling, run in CI.
+- Fix: claim explanations no longer run two sentences together.
+- Docs:
+  - `docs/submission/`: overview, Mermaid diagrams, track mapping, demo script, results and limitations, checklist,
+    labelled offline screenshots;
+  - README tech stack and differentiators;
+  - `signup` benchmark marked BLOCKED.
+
 ## 2.3.1 — final live round (`feat/vericode-live-final`)
 **Confirmed live (Groq + Tavily)**: model_dump import-path fix, truncation detection + bounded retry, new Python and
 TypeScript tasks, Demo C, Track 1 B/D improvements, Demo E, browser pass over persisted live results (6/6).

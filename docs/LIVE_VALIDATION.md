@@ -197,3 +197,36 @@ No judge tokens are counted in coding benchmarks: the evidence judge is a Track 
 makes no judge call. Tavily (external tool usage, counted separately and never as tokens) was called once in total: in one
 `users` VeriCode run, for a documentation fallback. It was not called in `summary` or `signup`, and the baseline never
 calls it.
+
+---
+
+# Final completion round (2026-11-08)
+
+| Run | Commit | Scope | Outcome |
+|---|---|---|---|
+| [42465099749](https://github.com/Clint0-0/VeriCode/actions/runs/42465099749) | `cda4711` | chained-call TS task, `signup` benchmark | **chained task ACTUAL AND SUCCESSFUL**; `signup` BLOCKED (429, retry-after 76–166 s, above the 65 s wait limit then in force) |
+| [42465458363](https://github.com/Clint0-0/VeriCode/actions/runs/42465458363) | `80a8e64` | chained task again (with the local-identifier fix), `signup` with a 180 s wait limit | **BLOCKED**: 429, retry-after 314–643 s. Not retried further |
+
+**Chained-call TypeScript task** (`live_validation.TS_CHAIN_TASK`, installed zod 3.23.8, vitest 2.1.9, TypeScript 5.9.3),
+run 42465099749:
+- Passed first try, 0 repairs. 2 files written (`src/registration.ts`, `tests/registration.test.ts`); vitest passed.
+- Tokens (provider-reported): planner 702 in / 594 out, coder 940 in / 575 out, 2,811 total.
+- Pre-flight, re-checked per API with the compiler checker: **8 chained APIs resolved through call return types**,
+  all `VERIFIED_LOCAL`:
+  - `z.string().trim().min`, `z.string().email`, `z.coerce.number().int`, `z.coerce.number().int().positive`;
+  - `z.string().min`, `z.array(…).default`;
+  - `expect(…).toEqual`, `expect(…).toThrow`.
+- One false alarm: `RegistrationSchema.parse` NOT_FOUND under zod (the schema the task creates). It is now
+  UNCERTAIN "project-local identifier" (`80a8e64`).
+- The partial second run showed two more false alarms: `z.ZodSchema.parse` (instance method through a namespace) and
+  `vitest.expect.toThrow` (module repeated in the name). Both fixed in `b75a3bb`, with regression tests. These three
+  fixes are **LOCAL · CI only**.
+- `z.string().nonempty()` is reported DEPRECATED (installed zod marks it `@deprecated`) by the checker and the
+  regression tests. The live plan used `min(1)` instead, so the deprecation was not exercised on a live plan.
+
+**signup benchmark: BLOCKED.** Best available data (run 42461511457): baseline 3/3, VeriCode 2/3, with one VeriCode run
+stopped by a 429. Missing for a computable result: one VeriCode run, or a fresh 3 + 3 set on the current code.
+Savings are not computed; the completed pairs were −127% and −136%.
+
+Rate-limit behaviour verified live: `retry-after` is honoured. Quota-stopped sections are classified BLOCKED, not
+FAILED. Waits above the configured limit stop immediately instead of retrying.

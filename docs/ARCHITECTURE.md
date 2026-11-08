@@ -57,6 +57,12 @@ docs subdomains 0.8 → encyclopedia 0.6 (secondary) → news 0.7 (secondary) �
 Authority is applied only to sources whose content passed the relevance gate.
 
 **Claim status rules**
+- Evidence sufficiency (applied before the rules below):
+  - only primary or secondary, non-community sources may contradict a claim;
+  - a weak side is set aside against a strong side, and disagreement among weak sources only is UNVERIFIED;
+  - a lexical match never overrides value, installed-code or judged evidence;
+  - for "latest version" claims, an authoritative source naming a newer version contradicts regardless of dates;
+  - a value inside a negated sentence is not support.
 - Relevance: a source counts only if ≥34 % of the claim's subject terms appear in the best-matching excerpt.
 - *support (value)*: the claim's concrete value appears in a statement covering ≥50% of the claim's terms (version, money, person, percent, year). For "latest/current"
   version claims, the source's highest version must equal the claimed one.

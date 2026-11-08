@@ -1,8 +1,11 @@
 # Problem statements and solution rationale
 
-> **Official wording not included.** The hackathon's official problem-statement documents were not available while
-> this was written. The descriptions below are **our own summaries**. Add the originals to
-> [`docs/problem-statements/`](problem-statements/README.md) and link them here.
+> **Official documents missing (external blocker).** The official hackathon documents for **Track 1, Problem
+> Statement 1** and **Track 2, Problem Statement 1** are not in this repository or in any material supplied to the
+> build. No official link is recorded anywhere in the project. The descriptions below are **our own summaries**, not
+> official wording. To close this, add the originals unchanged as `docs/problem-statements/track1-ps1.pdf` and
+> `docs/problem-statements/track2-ps1.pdf` and link them here. Requirement-by-requirement mapping with evidence:
+> [submission/TRACK_MAPPING.md](submission/TRACK_MAPPING.md).
 
 ## Our selection (own summaries)
 **Track 1, Problem Statement 1 — stale-answer detection.** LLM answers can contain information that was true once
