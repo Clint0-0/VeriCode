@@ -1,8 +1,11 @@
 # Track mapping
 
-> **Official problem-statement documents are not in this repository.** The requirement lists below are the team's
-> own reading of the selected problem statements (Track 1 PS1, Track 2 PS1). They are not official wording. See
-> [../PROBLEM_STATEMENTS.md](../PROBLEM_STATEMENTS.md) and add the originals to `../problem-statements/`.
+> **Official sheets:** [Track 1 PS1 (Tavily, Stale-answer detector)](../problem-statements/track1-ps1.pdf) ·
+> [Track 2 PS1 (Bifrost, coding agent on the fewest tokens)](../problem-statements/track2-ps1.pdf).
+> Official asks, in brief: Track 1, take any LLM answer, flag claims likely to be stale, re-verify them against live
+> sources with a freshness score per claim. Track 2, a coding agent (CLI, IDE extension or server) that completes real
+> coding tasks correctly on as few tokens as possible. The requirement lists below are the team's own breakdown of
+> those asks.
 
 Evidence labels: **LOCAL** · **CI** · **LIVE** (real Groq `openai/gpt-oss-120b` + Tavily) · **MOCK** · **BLOCKED**.
 

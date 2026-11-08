@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.3 — signup benchmark completed
+- **LIVE** (run 42491474776, `38ff1f5`): `signup` 3 + 3, both modes 3/3 first pass. Baseline 767.3 tokens, VeriCode
+  1,838.3 tokens: **−139.6%**. VeriCode costs more on this tiny task; the docs say so. Replaces the BLOCKED status.
+- Official problem-statement sheets added; file names swapped so `track1-ps1.pdf` is the Tavily sheet (Track 1,
+  stale-answer detector) and `track2-ps1.pdf` the Bifrost sheet (Track 2, coding agent). Docs link them.
+
 ## 2.3.2 — final completion round
 - **LIVE**: a chained-call TypeScript task passed first try (2,811 tokens), with 8 chained zod/vitest APIs resolved
   by pre-flight through call return types.

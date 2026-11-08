@@ -46,7 +46,7 @@ Measured with `python -m vericode.live_validation --only benchmark_actual --benc
 and [LIVE_VALIDATION.md](LIVE_VALIDATION.md):
 - `users`: 79.6% savings.
 - `summary`: 49.6% savings.
-- `signup`: BLOCKED. One VeriCode run was rate-limited and three later attempts were blocked by Groq 429; the two completed pairs were about −130%.
+- `signup`: −139.6% (VeriCode costs more; baseline 767 vs VeriCode 1,838 tokens, both 3/3 first pass), run [42491474776](https://github.com/Clint0-0/VeriCode/actions/runs/42491474776).
 
 Three small demo tasks are not a general savings claim. On a free Groq account, expect HTTP 429 waits: the client
 waits out short per-minute resets and stops on long ones.

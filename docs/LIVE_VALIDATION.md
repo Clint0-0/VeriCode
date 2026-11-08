@@ -191,7 +191,7 @@ The planner didn't use a chained call in this run, so chained-call resolution (`
 |---|---|---|---|---|---|---|---|---|---|
 | users | 3/3 / 3/3 | 0/3 / 2/3 | 2.3 / 0.3 | 9,565.7 / 1,070 | 1,464 / 705 | 531 in / 206 out | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** |
 | summary | 3/3 / 3/3 | 2/3 / 3/3 | 0.3 / 0 | 3,438 / 503.3 | 1,499 / 488.7 | 564 in / 80 out | 3,941.3 ± 1,842.6 | 1,987.7 ± 150.4 | **49.6%** |
-| signup | 3/3 / 2/3 | 3/3 / 2/3 | 0 / 0 | 560 / 201 | 881.7 / 312.3 (incl. a 0-token failed run) | about 547 overhead | 761 ± 27 | 1,793 (2 completed runs) | **not computed** (pairs −127%, −136%) |
+| signup (run 42491474776) | 3/3 / 3/3 | 3/3 / 3/3 | 0 / 0 | 560 / 207.3 | 1,325.7 / 512.7 | 582 in / 256 out (overhead 918) | 767.3 ± 38.6 | 1,838.3 ± 65.6 | **−139.6%** (pairs −154.7, −135.8, −129.2) |
 
 No judge tokens are counted in coding benchmarks: the evidence judge is a Track 1 component, and the coding pipeline
 makes no judge call. Tavily (external tool usage, counted separately and never as tokens) was called once in total: in one
@@ -206,6 +206,7 @@ calls it.
 |---|---|---|---|
 | [42465099749](https://github.com/Clint0-0/VeriCode/actions/runs/42465099749) | `cda4711` | chained-call TS task, `signup` benchmark | **chained task ACTUAL AND SUCCESSFUL**; `signup` BLOCKED (429, retry-after 76–166 s, above the 65 s wait limit then in force) |
 | [42465458363](https://github.com/Clint0-0/VeriCode/actions/runs/42465458363) | `80a8e64` | chained task again (with the local-identifier fix), `signup` with a 180 s wait limit | **BLOCKED**: 429, retry-after 314–643 s. Not retried further |
+| [42491474776](https://github.com/Clint0-0/VeriCode/actions/runs/42491474776) | `38ff1f5` | `signup` benchmark, 3 + 3 | **ACTUAL AND COMPARABLE**: −139.6%, both modes 3/3 first pass, no 429 |
 
 **Chained-call TypeScript task** (`live_validation.TS_CHAIN_TASK`, installed zod 3.23.8, vitest 2.1.9, TypeScript 5.9.3),
 run 42465099749:
@@ -224,9 +225,10 @@ run 42465099749:
 - `z.string().nonempty()` is reported DEPRECATED (installed zod marks it `@deprecated`) by the checker and the
   regression tests. The live plan used `min(1)` instead, so the deprecation was not exercised on a live plan.
 
-**signup benchmark: BLOCKED.** Best available data (run 42461511457): baseline 3/3, VeriCode 2/3, with one VeriCode run
-stopped by a 429. Missing for a computable result: one VeriCode run, or a fresh 3 + 3 set on the current code.
-Savings are not computed; the completed pairs were −127% and −136%.
+**signup benchmark: ACTUAL AND COMPARABLE** (run [42491474776](https://github.com/Clint0-0/VeriCode/actions/runs/42491474776), `38ff1f5`, 2026-11-08). Fresh 3 + 3 set, no 429s:
+baseline 3/3 first pass at 767.3 ± 38.6 tokens, VeriCode 3/3 first pass at 1,838.3 ± 65.6 tokens, savings **−139.6%**.
+VeriCode costs more on this tiny task because nothing needed repairing. Earlier blocked attempts are listed above for history.
+Groq quota seen in this run: 1,000 requests and 8,000 tokens per minute.
 
 Rate-limit behaviour verified live: `retry-after` is honoured. Quota-stopped sections are classified BLOCKED, not
 FAILED. Waits above the configured limit stop immediately instead of retrying.

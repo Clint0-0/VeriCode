@@ -30,11 +30,12 @@ OpenAI-compatible API + Tavily, run in GitHub Actions), **MOCK**, **BLOCKED**. F
 |---|---|---|---|---|---|---|
 | users | 3/3 / 3/3 | 0/3 / 2/3 | 2.3 / 0.3 | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** (pairs 76.6 / 73.6 / 85.6) |
 | summary | 3/3 / 3/3 | 2/3 / 3/3 | 0.3 / 0 | 3,941.3 ± 1,842.6 | 1,987.7 ± 150.4 | **49.6%** (pairs 24.8 / 68.5 / 34.4) |
-| signup | 3/3 / 2/3 | 3/3 / 2/3 | 0 / 0 | 761 ± 27 | 1,793 (2 completed runs) | **BLOCKED**: savings not computed. Completed pairs −127% / −136% |
+| signup | 3/3 / 3/3 | 3/3 / 3/3 | 0 / 0 | 767.3 ± 38.6 | 1,838.3 ± 65.6 | **−139.6%** (pairs −154.7 / −135.8 / −129.2): VeriCode costs more |
 
-`signup`: the third VeriCode run was stopped by a Groq HTTP 429 (run 42461511457). Three later attempts
-(42462137064, 42465099749, 42465458363) were rate-limited before completing three runs per mode, with retry-after
-76–1,347 s. Missing: **one VeriCode run**, or ideally a fresh 3 + 3 set on the current code.
+`signup`: fresh 3 + 3 set on `38ff1f5` (run 42491474776), no rate limits. Both modes passed first try; VeriCode's
+planner + pre-flight overhead (about 920 tokens) bought nothing because the baseline needed no repairs. Earlier attempts
+(42461511457, 42462137064, 42465099749, 42465458363) were blocked by Groq 429. **VeriCode saves tokens when the baseline
+would need repairs, and costs more on tiny tasks that pass first try.**
 
 Tavily usage is counted separately from tokens: 1 search in one `users` VeriCode run; none in `summary` or `signup`.
 The coding pipeline makes no evidence-judge call, so judge tokens are 0 in these benchmarks.
@@ -44,7 +45,6 @@ planner and pre-flight cost about 550–730 tokens. On a tiny task the baseline 
 tokens, and that overhead roughly doubles the cost. Three small demo tasks are **not** a general savings claim.
 
 ## Limitations
-- Official problem-statement documents are not in the repository; the track mapping uses team summaries.
 - Anthropic adapter: implemented and contract-tested with fake transports, never live.
 - Benchmark: three small tasks, n=3, one task blocked; no large-repository benchmark.
 - Groq free tier (8,000 tokens/min plus a longer cap) makes live runs slow; the client waits out resets up to the

@@ -56,8 +56,8 @@ process sandbox (`VERICODE_SANDBOX=auto|docker|process`).
 
 ## The two problem statements and why they are combined
 
-Full rationale: [docs/PROBLEM_STATEMENTS.md](docs/PROBLEM_STATEMENTS.md). The official problem-statement documents
-were **not available**, so this README doesn't quote them; add them to `docs/problem-statements/`. Our selection, in our own words:
+Full rationale: [docs/PROBLEM_STATEMENTS.md](docs/PROBLEM_STATEMENTS.md). Official sheets: [Track 1 PS1 (Tavily)](docs/problem-statements/track1-ps1.pdf),
+[Track 2 PS1 (Bifrost)](docs/problem-statements/track2-ps1.pdf). Our selection, in our own words:
 - **Track 1, PS1:** detect stale or incorrect information in LLM answers and verify it against evidence.
 - **Track 2, PS1:** stop AI coding agents from using APIs that don't match the installed dependencies, while using fewer tokens.
 
@@ -122,7 +122,6 @@ it never spends credits on a push. Use `only=` to run selected harness sections.
 ## Live validation status
 Full report: [docs/LIVE_VALIDATION.md](docs/LIVE_VALIDATION.md). Everything marked LIVE in the status table ran against
 real Groq and Tavily from GitHub Actions. Open items:
-- `signup` benchmark: BLOCKED by Groq rate limits (one VeriCode run missing).
 - The latest pre-flight false-alarm fixes are not yet exercised live.
 - Anthropic has never been run live.
 
@@ -135,14 +134,14 @@ repair budget (3) and acceptance tests). Mean ± stdev total tokens per run:
 |---|---|---|---|---|---|---|
 | users (pydantic v1 APIs planned) | 3/3 / 3/3 | 0/3 / 2/3 | 2.3 / 0.3 | 10,635.7 ± 3,717.1 | 2,169 ± 725.1 | **79.6%** (pairs 76.6 / 73.6 / 85.6) |
 | summary (no API risk) | 3/3 / 3/3 | 2/3 / 3/3 | 0.3 / 0 | 3,941.3 ± 1,842.6 | 1,987.7 ± 150.4 | **49.6%** (pairs 24.8 / 68.5 / 34.4) |
-| signup (TypeScript zod, 3-file repo) | 3/3 / 2/3 | 3/3 / 2/3 | 0 / 0 | 761 ± 27 | 1,793 avg of the 2 completed runs | **BLOCKED, not computed**: one VeriCode run was stopped by a Groq 429, and three later attempts were rate-limited. The 2 completed pairs were **−127% and −136%** |
+| signup (TypeScript zod, 3-file repo) | 3/3 / 3/3 | 3/3 / 3/3 | 0 / 0 | 767.3 ± 38.6 | 1,838.3 ± 65.6 | **−139.6%** (pairs −154.7 / −135.8 / −129.2): VeriCode costs more |
 
-Runs: users [42448014676](https://github.com/Clint0-0/VeriCode/actions/runs/42448014676); summary and signup
-[42461511457](https://github.com/Clint0-0/VeriCode/actions/runs/42461511457).
+Runs: users [42448014676](https://github.com/Clint0-0/VeriCode/actions/runs/42448014676); summary
+[42461511457](https://github.com/Clint0-0/VeriCode/actions/runs/42461511457); signup [42491474776](https://github.com/Clint0-0/VeriCode/actions/runs/42491474776) (fresh 3 + 3 on `38ff1f5`).
 
 **Reading:** VeriCode saved tokens where the baseline needed repairs. Each baseline repair resends the whole
 repository; VeriCode's planner + pre-flight cost about 550-730 tokens and avoided those repairs. On the tiny `signup`
-task the baseline succeeded first try with about 760 tokens, so VeriCode's overhead roughly doubles the cost. **These
+task the baseline succeeded first try with about 760 tokens, so VeriCode's planner + pre-flight overhead (about 920 tokens) makes it about 2.4x more expensive. **These
 are three small demo tasks. They are not a general savings claim.**
 
 **Earlier actual run, before the planner optimisation and pre-flight fixes (run 42397432837, superseded):**
@@ -190,7 +189,6 @@ A configured real provider that fails returns an error. It never falls back to m
   Groq free-tier rate limits (HTTP 429) cut the last validation run short.
 - Actual-token savings are measured on three small demo tasks, computable for two (79.6%, 49.6%). On the smallest task
   VeriCode costs about 2.3x the baseline. There is no general savings claim.
-- The official problem-statement documents are not in the repository (see `docs/problem-statements/`).
 - Low-authority sources may still *support* a claim (noted in the explanation, low confidence); they can no longer
   contradict one.
 - Groq free-tier limits (8,000 tokens/min plus a longer cap) make full benchmarks slow or blocked; the client waits
@@ -207,11 +205,9 @@ A configured real provider that fails returns an error. It never falls back to m
 - Mock coding supports only the 3 bundled tasks. Real-provider mode accepts any task.
 
 ## Future work
-- Re-run the `signup` benchmark when the Groq quota allows (`bench_tasks=signup`), and benchmark larger, more diverse
-  repositories, where avoided repairs should matter more.
+- Benchmark larger, more diverse repositories, where avoided repairs should matter more.
 - More package ecosystems (Go, Rust, Java), stronger semantic claim verification, more evidence providers.
 - Skip the planner for tasks that touch no third-party API (the main overhead on tiny tasks).
 - Live-test the Anthropic provider and one more OpenAI-compatible model.
 - Build and publish the self-contained sandbox image.
-- Add the official problem-statement documents and link them from `docs/PROBLEM_STATEMENTS.md`.
 

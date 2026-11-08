@@ -1,10 +1,8 @@
 # Problem statements and solution rationale
 
-> **Official documents missing (external blocker).** The official hackathon documents for **Track 1, Problem
-> Statement 1** and **Track 2, Problem Statement 1** are not in this repository or in any material supplied to the
-> build. No official link is recorded anywhere in the project. The descriptions below are **our own summaries**, not
-> official wording. To close this, add the originals unchanged as `docs/problem-statements/track1-ps1.pdf` and
-> `docs/problem-statements/track2-ps1.pdf` and link them here. Requirement-by-requirement mapping with evidence:
+> **Official documents:** [Track 1 PS1, Tavily track: Stale-answer detector](problem-statements/track1-ps1.pdf) ·
+> [Track 2 PS1, Bifrost priority track: coding agent on the fewest tokens](problem-statements/track2-ps1.pdf).
+> The descriptions below are our own summaries; the PDFs are the authoritative wording. Requirement-by-requirement mapping with evidence:
 > [submission/TRACK_MAPPING.md](submission/TRACK_MAPPING.md).
 
 ## Our selection (own summaries)

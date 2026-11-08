@@ -1,8 +1,9 @@
-# Official problem statements (to be added)
+# Official problem statements
 
-Place the official hackathon documents here, e.g.:
-- `track1-ps1.pdf` (or `.md`): Track 1, Problem Statement 1
-- `track2-ps1.pdf` (or `.md`): Track 2, Problem Statement 1
+The hackathon's official problem-statement sheets, added unchanged by the team:
+- [`track1-ps1.pdf`](track1-ps1.pdf): **Tavily track** (track partner), problem statement 01, *Stale-answer detector*.
+- [`track2-ps1.pdf`](track2-ps1.pdf): **Bifrost priority track** (title partner), problem statement 01, *coding agent on
+  the fewest tokens*.
 
-Then update the links in `docs/PROBLEM_STATEMENTS.md`. The summaries there are our own; they intentionally do not
-reproduce official wording.
+Each sheet lists several problem statements; teams choose one per track. VeriCode takes 01 from each.
+Requirement mapping: [../submission/TRACK_MAPPING.md](../submission/TRACK_MAPPING.md).
