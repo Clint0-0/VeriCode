@@ -330,10 +330,19 @@ def _note_limits(headers) -> None:
 
 
 def _rate_wait(resp) -> float | None:
-    """Seconds the provider asks us to wait after a 429 (largest of retry-after / reset headers)."""
-    vals = [_duration(resp.headers.get(h)) for h in ("retry-after", "x-ratelimit-reset-tokens", "x-ratelimit-reset-requests")]
-    vals = [x for x in vals if x is not None]
-    return max(vals) if vals else None
+    """Seconds to wait after a 429. The provider's retry-after wins; otherwise use the reset of the quota that is
+    actually exhausted (a request-window reset is irrelevant while requests remain, and vice versa)."""
+    h = resp.headers
+    ra = _duration(h.get("retry-after"))
+    if ra is not None:
+        return ra
+    waits = []
+    for kind in ("tokens", "requests"):
+        rem = h.get(f"x-ratelimit-remaining-{kind}")
+        reset = _duration(h.get(f"x-ratelimit-reset-{kind}"))
+        if reset is not None and (rem is None or (rem.isdigit() and int(rem) <= 0) or kind == "tokens"):
+            waits.append(reset)
+    return min(waits) if waits else None
 
 
 def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,

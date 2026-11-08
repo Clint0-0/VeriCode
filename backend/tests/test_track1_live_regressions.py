@@ -73,3 +73,16 @@ def test_product_names_map_to_publisher_domain():
     a = assess("https://openai.com/chatgpt/pricing", [], "pricing", "ChatGPT Plus costs $20 per month.", ["chatgpt", "plus"])
     assert a.tier == "primary" and a.matched_rule == "entity:openai"
     assert assess("https://openai-pricing.example.com/x", [], "pricing", "ChatGPT Plus costs $20.", []).tier != "primary"
+
+
+def test_installed_source_not_overridden_by_lexical_doc_match(tmp_path, sample_project):
+    """Live Demo E: '@validator' was CONFLICTING because a docs page lexically 'supported' it while the installed
+    pydantic 2.9.2 marks it deprecated."""
+    docs = {"title": "Validators", "url": "https://docs.pydantic.dev/latest/concepts/validators/", "published_date": None,
+            "keywords": ["validator", "pydantic"], "content": "To validate fields in Pydantic, use the @validator decorator."}
+    p = tmp_path / "fx.json"
+    ans = "To validate fields in Pydantic, use the @validator decorator."
+    p.write_text(json.dumps({"answer": ans, "sources": [{"min_match": 1, **docs}]}))
+    c = stale.analyze(ans, mode="fixture", fixture=p, now=NOW, workspace="sample_project")["claims"][0]
+    assert c["status"] == "CONTRADICTED", c["explanation"]
+    assert "lexical-only supporting" in c["explanation"]

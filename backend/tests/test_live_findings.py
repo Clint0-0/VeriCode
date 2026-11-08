@@ -138,3 +138,30 @@ def test_structured_effort_only_on_structured_stages_and_dropped_if_rejected(ope
     assert llm.complete("s", "p", "planner", transport=httpx.MockTransport(reject)).text == "ok"
     assert seen == [True, False]
     llm._effort_rejected.clear()
+
+
+def test_retry_after_wins_over_irrelevant_request_window_reset(openai_groq, monkeypatch):
+    """Live: Groq sent retry-after 7 with x-ratelimit-reset-requests 25m55s while 982 requests remained; the old code
+    took the max (1555s) and gave up instead of waiting 7s."""
+    slept, n = [], []
+    monkeypatch.setattr("time.sleep", lambda s: slept.append(s))
+    hdr = {"retry-after": "7", "x-ratelimit-remaining-requests": "982", "x-ratelimit-reset-requests": "25m55.199s",
+           "x-ratelimit-remaining-tokens": "360", "x-ratelimit-reset-tokens": "57.3s"}
+    h = lambda req: (n.append(1), httpx.Response(429, headers=hdr, json={}) if len(n) == 1 else _resp("ok", "stop", 1))[1]
+    assert llm.complete("s", "p", "planner", transport=httpx.MockTransport(h)).text == "ok"
+    assert slept == [7.5]
+
+
+def test_positional_values_accepted_for_varargs_decorator(sample_project):
+    from vericode.repo_intel import inspect_project
+    from vericode.skeleton import PlannedAPI, PlannedPackage
+    from vericode.verify_api import verify_planned_api
+    env = inspect_project(sample_project)
+
+    def check(name, args):
+        a = PlannedAPI(import_path="pydantic", name=name, type="function", arguments=args)
+        return verify_planned_api(env, PlannedPackage(package="pydantic", ecosystem="python", assumed_version="2", planned_apis=[a]), a)
+
+    assert check("field_serializer", ["'due'", "mode='plain'"]).status == "VERIFIED_LOCAL"  # live false INCOMPATIBLE
+    assert check("field_serializer", ["bogus_kw=1"]).status == "INCOMPATIBLE"
+    assert check("Field", ["min_length", "regex"]).status == "INCOMPATIBLE"  # real v1 kwarg still caught

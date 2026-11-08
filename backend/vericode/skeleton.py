@@ -49,8 +49,8 @@ Respond with one compact JSON object and nothing else:
 "arguments":[str]}]}]}
 Optional per API, only when it matters: "version_sensitive":true. Omit every other field (installed versions are
 already known to the system). No prose, no comments.
-"import_path" is the module you import from (e.g. "pydantic", "zod"), never a class; use Class.method in "name" for
-methods (for chained JS/TS APIs use the declaring class, e.g. ZodString.min).
+"import_path" is the module you import from (e.g. "pydantic", "zod"), never a class; use Class.method / Class.attribute
+in "name" for members (e.g. BaseModel.model_config) (for chained JS/TS APIs use the declaring class, e.g. ZodString.min).
 For Python, "arguments" are keyword/parameter names. For node (JS/TS) packages, "arguments" are the TypeScript
 argument expressions you plan to pass (e.g. ["3", "'too short'"]) so the call can be type-checked.
 "assumed_version" = the library version your API knowledge is based on.

@@ -43,7 +43,7 @@ def facts(tmp_path_factory):
          "analyses": q("SELECT id, evidence_mode FROM analyses WHERE evidence_mode='live_tavily' ORDER BY created_at DESC"),
          "claims": q("SELECT analysis_id, claim_id, claim, status, confidence FROM claims"),
          "live_domains": [r["domain"] for r in q("SELECT DISTINCT domain FROM evidence WHERE origin='live_tavily' LIMIT 5")],
-         "tasks": q("SELECT id, mode, status FROM tasks ORDER BY created_at DESC"),
+         "tasks": q("SELECT id, mode, status, success FROM tasks ORDER BY created_at DESC"),
          "benchmarks": q("SELECT id FROM benchmarks ORDER BY created_at DESC")}
     c.close()
     assert f["analyses"] and f["live_domains"] and f["tasks"], "live DB holds no live results"
@@ -124,7 +124,7 @@ def test_task_history_and_preflight_detail(page, server, facts):
     page.goto(f"{server}/#history")
     page.get_by_role("heading", name="Task History", level=1).wait_for()
     page.get_by_text(facts["tasks"][0]["id"]).first.wait_for(timeout=15000)
-    vt = next((t for t in facts["tasks"] if t["mode"] == "vericode"), None)
+    vt = next((t for t in facts["tasks"] if t["mode"] == "vericode" and t["success"]), None)
     if vt:
         page.goto(f"{server}/#history/{vt['id']}")
         page.get_by_text(vt["id"]).first.wait_for(timeout=15000)

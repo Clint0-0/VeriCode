@@ -347,9 +347,20 @@ class PyResolver:
 def check_arguments(info: SymbolInfo, args: list[str]) -> list[dict]:
     out = []
     names = {p["name"] for p in info.params}
-    for a in args:
-        a = a.split("=")[0].strip()
+    positional_slots = sum(1 for p in info.params if p.get("kind", "positional") == "positional" and p["name"] not in ("self", "cls"))
+    used_positional = 0
+    for raw in args:
+        keyword = "=" in raw and raw.split("=")[0].strip().isidentifier()
+        a = raw.split("=")[0].strip() if keyword else raw.strip()
         if not a or a.startswith("*"):
+            continue
+        if not keyword and not a.isidentifier():
+            # a positional VALUE ('due', 3, None), not a parameter name
+            used_positional += 1
+            ok = info.accepts_var_args or used_positional <= positional_slots
+            out.append({"argument": a, "status": "supported" if ok else "unsupported",
+                        "detail": "positional value" + (" (accepted by *args)" if info.accepts_var_args else "")
+                        if ok else f"more positional values than the {positional_slots} positional parameter(s)"})
             continue
         if a in info.rejected_kwargs:
             out.append({"argument": a, "status": "rejected", "detail": info.rejected_kwargs[a]})
@@ -357,6 +368,8 @@ def check_arguments(info: SymbolInfo, args: list[str]) -> list[dict]:
             out.append({"argument": a, "status": "supported", "detail": "present in installed signature"})
         elif info.accepts_var_kwargs:
             out.append({"argument": a, "status": "uncertain", "detail": "not a named parameter; would be swallowed by **kwargs"})
+        elif info.accepts_var_args and not keyword:
+            out.append({"argument": a, "status": "uncertain", "detail": "not a parameter name; plausible as a positional value for *args"})
         else:
             out.append({"argument": a, "status": "unsupported", "detail": "not in installed signature and no **kwargs"})
     return out

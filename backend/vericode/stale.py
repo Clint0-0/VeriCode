@@ -435,6 +435,15 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     elif sup and not sup_strong and con_strong:
         notes.append(f"{len(sup)} low-authority supporting source(s) set aside: a primary/secondary source contradicts the claim")
         sup = []
+    # Method strength: a lexical term-overlap match never overrides value / installed-code / judged evidence on the other side.
+    hard = lambda rs: any(r.method in ("value", "installed_source", "llm_judge") for r in rs)
+    if sup and con and (sup_strong or con_strong):  # all-weak disagreement stays insufficient (handled below)
+        if hard(sup) and not hard(con):
+            notes.append(f"{len(con)} lexical-only contradicting match(es) set aside against stronger evidence")
+            con, con_strong = [], []
+        elif hard(con) and not hard(sup):
+            notes.append(f"{len(sup)} lexical-only supporting match(es) set aside against stronger evidence")
+            sup, sup_strong = [], []
     weak_only_contra = bool(con) and not con_strong
     # Version monotonicity: for a "latest/current version" claim, an authoritative source naming a newer released
     # version disproves it regardless of page dates. Undated pages with an equal/older version cannot do this.

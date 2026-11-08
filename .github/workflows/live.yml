@@ -89,15 +89,15 @@ jobs:
           VERICODE_LIVE_DB: /tmp/vericode_live.db
         run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_e2e_live.py -rs
       - name: Live tests
-        if: always()
+        if: always() && inputs.only == ''
         run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m live -rs
       - name: Demo D (live stale-answer check)
-        if: always()
+        if: always() && inputs.only == ''
         run: scripts/demo.sh d --live
       - name: Demo C (combined workflow)
-        if: always()
+        if: always() && inputs.only == ''
         run: scripts/demo.sh c
       - name: Demo 3 (paired benchmark)
         # the harness already ran the same run_benchmark() when skip_benchmark=false; don't spend the quota twice
-        if: always() && inputs.skip_benchmark == 'true'
+        if: always() && inputs.skip_benchmark == 'true' && inputs.only == ''
         run: scripts/demo.sh 3 --runs "${{ inputs.benchmark_runs }}"
