@@ -187,10 +187,24 @@ TS = Path(__file__).resolve().parents[2] / "demos" / "ts_project"
     ("z.string.bogus", [], "NOT_FOUND"),
 ])
 def test_ts_namespace_members_and_member_paths(name, args, expected):
+    _ts_check("zod", name, args, expected)
+
+
+@pytest.mark.skipif(not (TS / "node_modules" / "vitest").is_dir(), reason="ts_project dependencies not installed")
+@pytest.mark.parametrize("name,args,expected", [
+    ("expect.toThrow", [], "VERIFIED_LOCAL"),      # live: member of expect()'s result -> NOT_FOUND
+    ("expect.toEqual", ["1"], "VERIFIED_LOCAL"),
+    ("expect.toBogus", [], "NOT_FOUND"),
+])
+def test_ts_member_of_call_result_at_root(name, args, expected):
+    _ts_check("vitest", name, args, expected)
+
+
+def _ts_check(module, name, args, expected):
     from vericode.repo_intel import inspect_project
     from vericode.skeleton import PlannedAPI, PlannedPackage
     from vericode.verify_api import verify_planned_api
     env = inspect_project(TS)
-    a = PlannedAPI(import_path="zod", name=name, type="function", arguments=args)
-    f = verify_planned_api(env, PlannedPackage(package="zod", ecosystem="node", assumed_version="3.23", planned_apis=[a]), a)
+    a = PlannedAPI(import_path=module, name=name, type="function", arguments=args)
+    f = verify_planned_api(env, PlannedPackage(package=module, ecosystem="node", assumed_version=None, planned_apis=[a]), a)
     assert f.status == expected, f.explanation

@@ -142,10 +142,14 @@ async function main() {
       const seg = segs[i]
       prop = i === 0 && instType ? checker.getPropertyOfType(instType, seg) : null
       if (!prop) prop = checker.getPropertyOfType(type, seg) // static / namespace / object member
-      if (!prop && i > 0 && type.getCallSignatures().length) {
+      if (!prop && (i > 0 || !instType) && type.getCallSignatures().length) {
         // chained API (z.coerce.number().int()): the member lives on the previous call's return type
-        type = checker.getReturnTypeOfSignature(type.getCallSignatures()[0])
-        access[access.length - 1] += '()'
+        const sig0 = type.getCallSignatures()[0]
+        type = checker.getReturnTypeOfSignature(sig0)
+        const nreq = typeof sig0.minArgumentCount === 'number' ? sig0.minArgumentCount : 0
+        const callArgs = '(' + Array(nreq).fill('null as any').join(', ') + ')'
+        if (access.length) access[access.length - 1] += callArgs
+        else out.call_root = callArgs
         out.chained_call = true
         prop = checker.getPropertyOfType(type, seg)
       }
@@ -176,7 +180,10 @@ async function main() {
   }
   let prog = program
   if (callSrc && out.chained_call && out.member_access) {
-    callSrc = callSrc.replace(`__obj.${member}(`, `__obj.${out.member_access}(`)
+    // root call result: take its return type without inventing call arguments
+    callSrc = out.call_root
+      ? callSrc.replace(`__obj.${member}(`, `__obj${out.call_root}.${out.member_access}(`)
+      : callSrc.replace(`__obj.${member}(`, `__obj.${out.member_access}(`)
     files[callFile] = callSrc
     prog = ts.createProgram(Object.keys(files), options, host, program)
   }
