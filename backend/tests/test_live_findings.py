@@ -180,6 +180,11 @@ TS = Path(__file__).resolve().parents[2] / "demos" / "ts_project"
     ("z.coerce.bogus", [], "NOT_FOUND"),
     ("z.object", ["42"], "INCOMPATIBLE"),
     ("ZodString.nonempty", [], "DEPRECATED"),
+    ("z.coerce.number.int", [], "VERIFIED_LOCAL"),             # live: chained call result member -> NOT_FOUND
+    ("z.coerce.number.min", ["1"], "VERIFIED_LOCAL"),
+    ("z.coerce.number.min", ["'x'"], "INCOMPATIBLE"),
+    ("z.string.nonempty", [], "DEPRECATED"),                   # chain resolution exposes the real deprecation
+    ("z.string.bogus", [], "NOT_FOUND"),
 ])
 def test_ts_namespace_members_and_member_paths(name, args, expected):
     from vericode.repo_intel import inspect_project

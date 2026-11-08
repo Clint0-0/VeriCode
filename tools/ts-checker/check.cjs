@@ -136,11 +136,20 @@ async function main() {
   if (member) {
     const instType = sym.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface) ? checker.getDeclaredTypeOfSymbol(sym) : null
     const segs = member.split('.')
+    const access = [] // accessor path for the call check; "()" inserted where we stepped through a call's result
     let prop = null, pd = null
     for (let i = 0; i < segs.length; i++) {
       const seg = segs[i]
       prop = i === 0 && instType ? checker.getPropertyOfType(instType, seg) : null
       if (!prop) prop = checker.getPropertyOfType(type, seg) // static / namespace / object member
+      if (!prop && i > 0 && type.getCallSignatures().length) {
+        // chained API (z.coerce.number().int()): the member lives on the previous call's return type
+        type = checker.getReturnTypeOfSignature(type.getCallSignatures()[0])
+        access[access.length - 1] += '()'
+        out.chained_call = true
+        prop = checker.getPropertyOfType(type, seg)
+      }
+      access.push(seg)
       if (!prop) {
         out.found = false; out.member_found = false
         out.error = `${[name].concat(segs.slice(0, i)).join('.')} has no member '${seg}'`
@@ -150,6 +159,7 @@ async function main() {
       type = checker.getTypeOfSymbolAtLocation(prop, pd || imp)
     }
     target = prop
+    out.member_access = access.join('.')
     out.member_found = true
     out.deprecated = deprecatedOf(prop.declarations)
     if (pd) {
@@ -164,9 +174,15 @@ async function main() {
     const sigDep = out.signatures.find((s) => s.deprecated)
     if (sigDep && out.signatures.every((s) => s.deprecated)) out.deprecated = sigDep.deprecated
   }
+  let prog = program
+  if (callSrc && out.chained_call && out.member_access) {
+    callSrc = callSrc.replace(`__obj.${member}(`, `__obj.${out.member_access}(`)
+    files[callFile] = callSrc
+    prog = ts.createProgram(Object.keys(files), options, host, program)
+  }
   if (callSrc) {
-    const cf = program.getSourceFile(callFile)
-    const diags = ts.getPreEmitDiagnostics(program, cf).filter((d) => d.file && d.file.fileName === callFile)
+    const cf = prog.getSourceFile(callFile)
+    const diags = ts.getPreEmitDiagnostics(prog, cf).filter((d) => d.file && d.file.fileName === callFile)
     out.call_check = {
       source: callSrc.split('\n').slice(-2).join('\n').trim(),
       diagnostics: diags.map((d) => ({ code: d.code, message: ts.flattenDiagnosticMessageText(d.messageText, ' ') })),
