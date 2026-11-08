@@ -40,6 +40,16 @@ TS_TASK = ("Create src/config.ts exporting a zod schema named AppConfig for envi
            "undefined>) that uses safeParse and throws an Error whose message lists every issue path. Add vitest tests in "
            "tests/config.test.ts.")
 
+# Deliberately chained zod/vitest APIs (installed zod 3.23.8, vitest 2.1.9). The task names the chains so the planner
+# lists them and pre-flight must resolve each member on a call's return type. Not a bundled/mock task.
+TS_CHAIN_TASK = ("Create src/registration.ts exporting a zod schema RegistrationSchema with: username = "
+                 "z.string().trim().min(3); email = z.string().email(); age = z.coerce.number().int().positive(); "
+                 "tags = z.array(z.string().min(1)).default([]). Export register(input: unknown) that returns "
+                 "RegistrationSchema.parse(input) (so invalid input throws a ZodError). Add vitest tests in "
+                 "tests/registration.test.ts: valid input is parsed with expect(register(...)).toEqual(...), "
+                 "and invalid input uses expect(() => register(...)).toThrow(). In your API plan, list every chained "
+                 "call with its full chain in the name (e.g. z.coerce.number.int, z.string.trim.min, expect.toThrow).")
+
 SCENARIOS = {
     "A_current": ("Python 3.13 was released in October 2024. FastAPI supports asynchronous path operation functions "
                   "declared with async def."),
@@ -61,7 +71,8 @@ def _section(fn, *a, **kw) -> dict:
     try:
         out = fn(*a, **kw)
     except llm.LLMUnavailable as e:
-        out = {"status": FAILED, "error": redact(str(e))[:800]}
+        msg = redact(str(e))[:800]
+        out = {"status": BLOCKED if "rate limited (HTTP 429)" in msg else FAILED, "error": msg}
     except Exception as e:  # report, never hide
         out = {"status": FAILED, "error": redact(f"{type(e).__name__}: {e}")[:800],
                "traceback": redact(traceback.format_exc())[-1500:]}
@@ -268,7 +279,9 @@ def run_coding(project: str, prompt: str, mode: str = "vericode") -> dict:
     pf = db.loads((db.row("SELECT preflight_json FROM tasks WHERE id=?", (tid,)) or {}).get("preflight_json"), {})
     tests = [{"cmd": x.get("cmd") or x.get("name"), "passed": x.get("passed")} for x in (r.get("checks") or {}).get("results", [])][:8]
     bad_model_dump = [f for f in pf.get("findings", []) if "model_dump" in (f.get("planned_api") or "") and f.get("status") == "NOT_FOUND"]
-    return {"status": OK if r.get("success") else FAILED, "task_id": tid, "mode": mode, "outcome": r.get("outcome"),
+    err = r.get("error") or ""
+    status = OK if r.get("success") else (BLOCKED if "rate limited (HTTP 429)" in err else FAILED)
+    return {"status": status, "task_id": tid, "mode": mode, "outcome": r.get("outcome"),
             "false_not_found_model_dump": bool(bad_model_dump),
             "first_pass": r.get("first_pass_success"), "repairs": r.get("repair_attempts"),
             "changed_files": r.get("changed_files"), "tests": tests, "tokens": r.get("tokens"),
@@ -276,6 +289,33 @@ def run_coding(project: str, prompt: str, mode: str = "vericode") -> dict:
                                    for f in pf.get("findings", [])][:12],
             "api_corrections": r.get("api_corrections"), "diff": redact(r.get("diff") or "")[:6000],
             "error": redact(r.get("error") or "")[:600] or None, "duration_s_task": r.get("duration_s")}
+
+
+def run_coding_chain() -> dict:
+    """Live chained-call validation: run the chained TS task, then re-check each planned node API with the compiler
+    checker and record whether it was resolved through a call's return type (chained_call)."""
+    from . import jsinspect
+    out = run_coding("ts_project", TS_CHAIN_TASK)
+    p = (ROOT / "demos" / "ts_project").resolve()
+    pf = db.loads((db.row("SELECT preflight_json FROM tasks WHERE id=?", (out["task_id"],)) or {}).get("preflight_json"), {})
+    chains = []
+    for f in pf.get("findings", []):
+        mod, _, api = (f.get("planned_api") or "").partition(":")
+        name, _, member = api.partition(".")
+        if mod not in ("zod", "vitest") or not member:
+            continue
+        r = jsinspect.ts_compiler_check(p, mod, name, member, None)
+        chains.append({"api": f["planned_api"], "preflight_status": f.get("status"), "chained_call": bool(r.get("chained_call")),
+                       "member_access": r.get("member_access"), "found": r.get("found"), "deprecated": r.get("deprecated")})
+    resolved_chains = [c for c in chains if c["chained_call"]]
+    out["chain_checks"] = chains
+    out["chained_apis_planned"] = len(resolved_chains)
+    out["chains_all_resolved"] = bool(resolved_chains) and all(c["found"] and c["preflight_status"] in ("VERIFIED_LOCAL", "DEPRECATED") for c in resolved_chains)
+    if out["status"] == OK and not out["chains_all_resolved"]:
+        out["status"] = FAILED
+        out["error"] = ("task passed, but " + ("the planner listed no chained API" if not resolved_chains
+                        else "a chained API was not resolved by pre-flight") + " - chained-call validation not achieved")
+    return out
 
 
 # ----------------------------------------------------------------------------- 6. benchmark
@@ -290,9 +330,17 @@ def run_bench(runs: int, task_ids: list[str] | None = None) -> dict:
                       **{m: {k: s[m][k] for k in ("success_rate", "first_pass_rate", "total_tokens", "input_tokens", "output_tokens",
                                                    "verification_overhead_tokens", "repair_attempts", "search_calls", "duration_s",
                                                    "by_stage", "measurement", "errors")} for m in ("baseline", "vericode")}})
-    ok = b["measurement"] == "ACTUAL_PROVIDER_USAGE" and b["comparable_tasks"] > 0
-    return {"status": OK if ok else FAILED, "benchmark_id": b["id"],
-            **({} if ok else {"error": "no task had all runs succeed in both modes; savings not computed (see per-task errors)"}),
+    errs = [e for t in tasks for m in ("baseline", "vericode") for e in t[m]["errors"]]
+    quota_only = bool(errs) and all("rate limited (HTTP 429)" in e for e in errs)
+    for t in tasks:
+        te = [e for m in ("baseline", "vericode") for e in t[m]["errors"]]
+        t["status"] = ("COMPARABLE" if t["savings_pct"] is not None else
+                       "BLOCKED_BY_QUOTA" if te and all("rate limited (HTTP 429)" in e for e in te) else "FAILED")
+    ok = b["measurement"] == "ACTUAL_PROVIDER_USAGE" and b["comparable_tasks"] == len(tasks) and tasks
+    status = OK if ok else (BLOCKED if quota_only else FAILED)
+    return {"status": status, "benchmark_id": b["id"],
+            **({} if ok else {"error": ("runs were prevented by provider rate limits (HTTP 429); savings not computed for those tasks"
+                                        if quota_only else "some runs failed for reasons other than rate limits; see per-task errors")}),
             "measurement": b["measurement"], "model": b["coder_model"], "runs_per_mode": runs,
             "average_savings_pct": b["average_savings_pct"], "comparable_tasks": b["comparable_tasks"], "tasks": tasks}
 
@@ -360,6 +408,7 @@ def main() -> int:
     steps += [("demo_e_combined", run_demo_e),
               ("coding_python_new", lambda: run_coding("sample_project", PY_TASK)),
               ("coding_typescript_new", lambda: run_coding("ts_project", TS_TASK)),
+              ("coding_typescript_chain", run_coding_chain),
               ("coding_arbitrary_demoC", lambda: run_coding("sample_project", __import__("vericode.demo", fromlist=["x"]).ARBITRARY_TASK))]
     if not a.skip_benchmark:
         steps.append(("benchmark_actual", lambda: run_bench(a.runs, [x for x in a.bench_tasks.split(",") if x])))

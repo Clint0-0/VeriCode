@@ -208,3 +208,27 @@ def _ts_check(module, name, args, expected):
     a = PlannedAPI(import_path=module, name=name, type="function", arguments=args)
     f = verify_planned_api(env, PlannedPackage(package=module, ecosystem="node", assumed_version=None, planned_apis=[a]), a)
     assert f.status == expected, f.explanation
+
+
+def _bench(errors_b, errors_v, savings):
+    s = {"success_rate": 0, "first_pass_rate": 0, "total_tokens": {}, "input_tokens": {}, "output_tokens": {},
+         "verification_overhead_tokens": {}, "repair_attempts": {}, "search_calls": {}, "duration_s": {}, "by_stage": {},
+         "measurement": "ACTUAL_PROVIDER_USAGE"}
+    return {"task": "t", "token_savings_pct": savings, "paired_run_savings_pct": [], "savings_note": None, "flagged_api_usage": [],
+            "summary": {"baseline": {**s, "errors": errors_b}, "vericode": {**s, "errors": errors_v}}}
+
+
+@pytest.mark.parametrize("errs,expected", [
+    ([], "ACTUAL_SUCCESS"),
+    (["LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 900s"], "BLOCKED"),
+    (["tests failed: AssertionError"], "ACTUAL_FAILED"),
+])
+def test_benchmark_quota_stop_is_blocked_not_failed(monkeypatch, errs, expected):
+    from vericode import benchmark, live_validation
+    task = _bench([], errs, None if errs else 12.0)
+    monkeypatch.setattr(benchmark, "run_benchmark", lambda **k: {"tasks": [task], "measurement": "ACTUAL_PROVIDER_USAGE", "id": "b",
+                                                                   "coder_model": "m", "average_savings_pct": None,
+                                                                   "comparable_tasks": 0 if errs else 1})
+    out = live_validation.run_bench(3)
+    assert out["status"] == expected
+    assert out["tasks"][0]["status"] == {"ACTUAL_SUCCESS": "COMPARABLE", "BLOCKED": "BLOCKED_BY_QUOTA", "ACTUAL_FAILED": "FAILED"}[expected]
