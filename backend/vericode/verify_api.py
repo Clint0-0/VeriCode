@@ -202,7 +202,8 @@ def _verify_ts(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f:
     of the planned call when the planner supplied TypeScript argument expressions."""
     parts = api.name.split(".", 1) if api.type != "module" else ["", ""]
     name, member = parts[0], (parts[1] if len(parts) > 1 else "")
-    args = api.arguments if api.type in ("function", "method", "class", "decorator") else None
+    # no argument expressions planned -> existence/signature/deprecation only (a zero-argument call is not implied)
+    args = (api.arguments or None) if api.type in ("function", "method", "class", "decorator") else None
     r = jsinspect.ts_compiler_check(Path(env.root), api.import_path, name, member, args)
     f.verification_method.append("typescript_compiler_api")
     f.local = {"location": r.get("location"), "resolved_file": r.get("resolved_file"), "package": r.get("package"),
@@ -231,10 +232,17 @@ def _verify_ts(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f:
         return f
     cc = r.get("call_check") or {}
     diags = cc.get("diagnostics") or []
+    # identifiers the planner used inside argument expressions (its own variables) are unknowable here: those
+    # diagnostics make the argument check uncertain, never INCOMPATIBLE
+    unresolved = [d for d in diags if d["code"] in (2304, 2552, 2448)]
+    diags = [d for d in diags if d not in unresolved]
     sigs = r.get("signatures") or r.get("construct_signatures") or []
     f.argument_checks = []
     if args is not None and cc:
-        if not diags:
+        for d in unresolved:
+            f.argument_checks.append({"argument": cc.get("source", ""), "status": "uncertain",
+                                      "detail": f"TS{d['code']}: {d['message']} (planner-side identifier; not checkable)"})
+        if not diags and not unresolved:
             f.argument_checks.append({"argument": cc.get("source", ""), "status": "supported", "detail": "call type-checks against installed declarations"})
         for d in diags:
             kind = "rejected" if d["code"] in TS_ARITY else "unsupported" if d["code"] in TS_TYPE else "unsupported"
@@ -256,8 +264,10 @@ def _verify_ts(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f:
         f.explanation = f"Exists at {r.get('location')}, but the plan targeted {f.package} {f.assumed_version} while {f.installed_version} is installed."
     else:
         f.status, f.api_compatibility = "VERIFIED_LOCAL", "compatible"
-        f.verification_confidence = "high" if (args is not None and cc) else "medium"
-        f.explanation = f"Found at {r.get('location')}" + ("; planned call type-checks" if cc and not diags else "; existence and signature only (no call to type-check)")
+        f.verification_confidence = "high" if (args is not None and cc and not unresolved) else "medium"
+        f.explanation = f"Found at {r.get('location')}" + (
+            "; existence and signature only (no call to type-check)" if not (args is not None and cc)
+            else "; planned call type-checks apart from planner-side identifiers" if unresolved else "; planned call type-checks")
     return f
 
 

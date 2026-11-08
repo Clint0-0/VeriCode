@@ -1,5 +1,6 @@
 """Regression tests for defects found during the live Groq/Tavily validation run (fake transports, no network)."""
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -165,3 +166,26 @@ def test_positional_values_accepted_for_varargs_decorator(sample_project):
     assert check("field_serializer", ["'due'", "mode='plain'"]).status == "VERIFIED_LOCAL"  # live false INCOMPATIBLE
     assert check("field_serializer", ["bogus_kw=1"]).status == "INCOMPATIBLE"
     assert check("Field", ["min_length", "regex"]).status == "INCOMPATIBLE"  # real v1 kwarg still caught
+
+
+TS = Path(__file__).resolve().parents[2] / "demos" / "ts_project"
+
+
+@pytest.mark.skipif(not (TS / "node_modules" / "zod").is_dir(), reason="ts_project dependencies not installed")
+@pytest.mark.parametrize("name,args,expected", [
+    ("z.object", ["{ PORT: z.string() }"], "VERIFIED_LOCAL"),   # live: TS2344 + "Cannot find name 'z'" -> INCOMPATIBLE
+    ("z.coerce.number", [], "VERIFIED_LOCAL"),                  # live: "z has no member 'coerce.number'" -> NOT_FOUND
+    ("z.string", [], "VERIFIED_LOCAL"),                         # live: empty args type-checked as a 0-arg call
+    ("z.object", ["{ PORT: schema }"], "VERIFIED_LOCAL"),       # planner-side identifier -> uncertain argument only
+    ("z.coerce.bogus", [], "NOT_FOUND"),
+    ("z.object", ["42"], "INCOMPATIBLE"),
+    ("ZodString.nonempty", [], "DEPRECATED"),
+])
+def test_ts_namespace_members_and_member_paths(name, args, expected):
+    from vericode.repo_intel import inspect_project
+    from vericode.skeleton import PlannedAPI, PlannedPackage
+    from vericode.verify_api import verify_planned_api
+    env = inspect_project(TS)
+    a = PlannedAPI(import_path="zod", name=name, type="function", arguments=args)
+    f = verify_planned_api(env, PlannedPackage(package="zod", ecosystem="node", assumed_version="3.23", planned_apis=[a]), a)
+    assert f.status == expected, f.explanation

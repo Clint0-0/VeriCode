@@ -64,7 +64,7 @@ async function main() {
   const local = '__vc_sym'
   const importLine = !name ? `import * as ${local} from ${JSON.stringify(mod)};`
     : isDefault ? `import ${local} from ${JSON.stringify(mod)};`
-    : `import { ${name} as ${local} } from ${JSON.stringify(mod)};`
+    : `import { ${name} as ${local}${/^[A-Za-z_$][\w$]*$/.test(name) ? ', ' + name : ''} } from ${JSON.stringify(mod)};`
   const probe = path.join(root, '__vericode_probe__.ts')
   const callFile = path.join(root, '__vericode_call__.ts')
   let callSrc = null
@@ -73,7 +73,9 @@ async function main() {
     callSrc = `${importLine}\ndeclare const __inst: any;\n`
     if (member) {
       // instance member of a class (or static member / namespace member)
-      callSrc += `declare const __obj: ${'InstanceType<typeof ' + local + '> extends never ? typeof ' + local + ' : (typeof ' + local + ' extends abstract new (...a: any) => any ? InstanceType<typeof ' + local + '> : typeof ' + local + ')'};\n__obj.${member}(${args});\n`
+      // class -> instance type; namespace/object export (e.g. zod's `z`) -> its own type. `infer` avoids the
+      // InstanceType<> constraint error (TS2344) on non-constructors. Member may be a path: coerce.number
+      callSrc += `declare const __obj: typeof ${local} extends abstract new (...a: any) => infer I ? I : typeof ${local};\n__obj.${member}(${args});\n`
     } else {
       callSrc += `(${local} as any) && 0; ${local}(${args});\n`
     }
@@ -133,12 +135,21 @@ async function main() {
   let type = decl ? checker.getTypeOfSymbolAtLocation(sym, decl) : checker.getDeclaredTypeOfSymbol(sym)
   if (member) {
     const instType = sym.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface) ? checker.getDeclaredTypeOfSymbol(sym) : null
-    let prop = instType ? checker.getPropertyOfType(instType, member) : null
-    if (!prop) prop = checker.getPropertyOfType(type, member) // static / namespace member
-    if (!prop) { out.found = false; out.member_found = false; out.error = `${name} has no member '${member}'`; return out }
+    const segs = member.split('.')
+    let prop = null, pd = null
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i]
+      prop = i === 0 && instType ? checker.getPropertyOfType(instType, seg) : null
+      if (!prop) prop = checker.getPropertyOfType(type, seg) // static / namespace / object member
+      if (!prop) {
+        out.found = false; out.member_found = false
+        out.error = `${[name].concat(segs.slice(0, i)).join('.')} has no member '${seg}'`
+        return out
+      }
+      pd = (prop.declarations || [])[0]
+      type = checker.getTypeOfSymbolAtLocation(prop, pd || imp)
+    }
     target = prop
-    const pd = (prop.declarations || [])[0]
-    type = checker.getTypeOfSymbolAtLocation(prop, pd || imp)
     out.member_found = true
     out.deprecated = deprecatedOf(prop.declarations)
     if (pd) {
