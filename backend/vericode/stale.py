@@ -519,7 +519,8 @@ def verify_claim(c: Claim, search, user_sources: list[tuple[str, str, str, str |
     if c.conditional and status in ("CURRENT_SUPPORTED", "CONTRADICTED"):
         expl += " Note: conditional claim - evidence was assessed for the stated condition only."
     if decisive:
-        expl += " " + "; ".join(sorted({r.relevance_explanation.split('; ', 1)[1] for r in decisive}))[:500]
+        detail = "; ".join(sorted({r.relevance_explanation.split('; ', 1)[1] for r in decisive}))[:500]
+        expl = expl.rstrip() + ("" if expl.rstrip().endswith((".", ")")) else ".") + " Detail: " + detail + ("" if detail.endswith(".") else ".")
     if status == "CONTRADICTED" and decisive and all(r.freshness is not None and r.freshness < 25 for r in decisive):
         expl += " Note: the contradicting evidence is itself old for this category; an even newer value may exist."
     if status == "CONTRADICTED":
