@@ -238,7 +238,7 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         req = client.build_request("POST", f"{settings.openai_base_url}/chat/completions",
                                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                                    json={"model": model, limit_key: max_tokens, "stream": True, "stream_options": {"include_usage": True},
-                                         **({"reasoning_effort": settings.reasoning_effort} if settings.reasoning_effort else {}),
+                                         **_effort(stage, provider, model),
                                          "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]})
     resp = client.send(req, stream=True)
     try:
@@ -285,6 +285,20 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
         return LLMResult(out, estimate_tokens(system + prompt), estimate_tokens(out), True, provider, model, stage, cut)
     finally:
         resp.close()
+
+
+STRUCTURED_STAGES = ("planner", "claim_judge", "claim_extraction")
+_effort_rejected: set[str] = set()  # models that returned 400 for reasoning_effort (sent once, then dropped)
+
+
+def _effort(stage: str, provider: str, model: str | None = None) -> dict:
+    """`reasoning_effort` for OpenAI-compatible endpoints: global setting, else the structured-stage setting for
+    planner/judge/extraction. Coder and repair stages only ever get the global value, identical for baseline and
+    VeriCode runs."""
+    if provider != "openai" or (model and model in _effort_rejected):
+        return {}
+    v = settings.reasoning_effort or (settings.structured_reasoning_effort if stage in STRUCTURED_STAGES else "")
+    return {"reasoning_effort": v} if v else {}
 
 
 RATE_HEADERS = ("x-ratelimit-limit-requests", "x-ratelimit-remaining-requests", "x-ratelimit-reset-requests",
@@ -370,11 +384,14 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         f"{settings.openai_base_url}/chat/completions",
                         headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                         json={"model": model, limit_key: max_tokens,
-                              **({"reasoning_effort": settings.reasoning_effort} if settings.reasoning_effort else {}),
+                              **_effort(stage, provider, model),
                               "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
                     )
                     if resp.status_code in (429, 500, 502, 503):
                         raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=resp.request, response=resp)
+                    if resp.status_code == 400 and "reasoning_effort" in resp.text and _effort(stage, provider, model):
+                        _effort_rejected.add(model)  # model does not accept the parameter: drop it, retry once
+                        continue
                     if resp.status_code >= 400:
                         raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
                     _note_limits(resp.headers)

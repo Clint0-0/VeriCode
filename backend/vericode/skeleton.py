@@ -43,11 +43,14 @@ class Skeleton(BaseModel):
 
 PLANNER_SYSTEM = """You are the planning stage of a coding agent. Do NOT write the implementation.
 List ONLY the external third-party library APIs (not stdlib, not project-local code) that you intend to call.
-Respond with a single JSON object and nothing else, matching:
-{"packages":[{"package":str,"ecosystem":"python"|"node","installed_version":str|null,"assumed_version":str|null,
+Respond with one compact JSON object and nothing else:
+{"packages":[{"package":str,"ecosystem":"python"|"node","assumed_version":str|null,
 "planned_apis":[{"import_path":str,"name":str,"type":"function"|"class"|"method"|"decorator"|"attribute"|"module"|"constant",
-"arguments":[str],"expected_types":{str:str},"purpose":str,"version_sensitive":bool}],"documentation_needed":[str]}],"notes":str}
-Use Class.method in "name" for methods (for chained JS/TS APIs use the declaring class, e.g. ZodString.min).
+"arguments":[str]}]}]}
+Optional per API, only when it matters: "version_sensitive":true. Omit every other field (installed versions are
+already known to the system). No prose, no comments.
+"import_path" is the module you import from (e.g. "pydantic", "zod"), never a class; use Class.method in "name" for
+methods (for chained JS/TS APIs use the declaring class, e.g. ZodString.min).
 For Python, "arguments" are keyword/parameter names. For node (JS/TS) packages, "arguments" are the TypeScript
 argument expressions you plan to pass (e.g. ["3", "'too short'"]) so the call can be type-checked.
 "assumed_version" = the library version your API knowledge is based on.

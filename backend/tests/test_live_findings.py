@@ -115,3 +115,26 @@ def test_long_rate_limit_stops_immediately_with_limits(openai_groq):
     with pytest.raises(llm.LLMUnavailable, match=r"retry after 3600s.*x-ratelimit-limit-tokens"):
         llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))
     assert len(n) == 1  # no repeated hammering against a daily cap
+
+
+def test_structured_effort_only_on_structured_stages_and_dropped_if_rejected(openai_groq, monkeypatch):
+    monkeypatch.setattr(settings, "structured_reasoning_effort", "low")
+    llm._effort_rejected.clear()
+    bodies = []
+    h = lambda req: (bodies.append(json.loads(req.content)), _resp("ok", "stop", 1))[1]
+    llm.complete("s", "p", "planner", transport=httpx.MockTransport(h))
+    llm.complete("s", "p", "coder", transport=httpx.MockTransport(h))
+    assert bodies[0]["reasoning_effort"] == "low" and "reasoning_effort" not in bodies[1]
+
+    seen = []
+
+    def reject(req):
+        b = json.loads(req.content)
+        seen.append("reasoning_effort" in b)
+        if "reasoning_effort" in b:
+            return httpx.Response(400, json={"error": {"message": "`reasoning_effort` is not supported with this model"}})
+        return _resp("ok", "stop", 1)
+    monkeypatch.setattr(settings, "planner_model", "other-model")
+    assert llm.complete("s", "p", "planner", transport=httpx.MockTransport(reject)).text == "ok"
+    assert seen == [True, False]
+    llm._effort_rejected.clear()

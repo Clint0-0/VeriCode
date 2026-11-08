@@ -93,8 +93,11 @@ class Settings:
     # reasoning models). Empty = parameter not sent.
     # On HTTP 429: wait when the provider's reset is at most this many seconds (per-minute limits), up to N times.
     # A longer reset (e.g. a daily cap) fails immediately with the provider's limits in the message.
+    live_min_requests: int = field(default_factory=lambda: int(_env("VERICODE_LIVE_MIN_REQUESTS", "60")))
     rate_limit_max_wait: float = field(default_factory=lambda: float(_env("VERICODE_RATE_LIMIT_MAX_WAIT", "65")))
     rate_limit_max_waits: int = field(default_factory=lambda: int(_env("VERICODE_RATE_LIMIT_MAX_WAITS", "4")))
+    # reasoning_effort for structured stages only (planner, evidence judge, claim extraction); coder/repair untouched.
+    structured_reasoning_effort: str = field(default_factory=lambda: _env("VERICODE_STRUCTURED_REASONING_EFFORT", ""))
     reasoning_effort: str = field(default_factory=lambda: _env("VERICODE_REASONING_EFFORT", ""))
     llm_stream: bool = field(default_factory=lambda: _env("VERICODE_LLM_STREAM", "1") == "1")
     llm_timeout: float = field(default_factory=lambda: float(_env("VERICODE_LLM_TIMEOUT", "180")))
