@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 import traceback
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -376,7 +374,7 @@ def check_api(S: dict) -> dict:
 
 # ----------------------------------------------------------------------------- report
 def _md(rep: dict) -> str:
-    L = [f"# VeriCode live validation report", "", f"Generated {rep['generated_at']} - provider `{rep['config'].get('provider')}` "
+    L = ["# VeriCode live validation report", "", f"Generated {rep['generated_at']} - provider `{rep['config'].get('provider')}` "
          f"endpoint `{rep['config'].get('endpoint_host')}` model `{rep['config'].get('coder_model')}`.", "",
          "| Section | Result | Duration (s) |", "|---|---|---|"]
     for k, v in rep["sections"].items():
@@ -388,9 +386,17 @@ def _md(rep: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+
+def _positive_int(v: str) -> int:
+    import argparse
+    n = int(v)
+    if not 1 <= n <= 10:
+        raise argparse.ArgumentTypeError("--runs must be between 1 and 10")
+    return n
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--runs", type=_positive_int, default=3)
     ap.add_argument("--skip-benchmark", action="store_true")
     ap.add_argument("--bench-tasks", default="", help="comma-separated catalog task ids (default: all)")
     ap.add_argument("--only", default="", help="comma-separated section names to run (config always runs)")

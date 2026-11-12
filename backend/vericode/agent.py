@@ -23,7 +23,7 @@ from . import db, llm, memory
 from .config import ROOT, settings
 from .repo_intel import ProjectEnvironment, conventions_text, inspect_project, select_relevant_files
 from .security import SecurityError, run_command, safe_join, sandbox_backend
-from .skeleton import Skeleton, generate_skeleton
+from .skeleton import generate_skeleton
 from .tavily import TavilyClient
 from .verify_api import verify_skeleton
 

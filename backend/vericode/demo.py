@@ -166,11 +166,19 @@ def offline_suite(runs: int = 1) -> None:
     print("Demo C (arbitrary task) needs a real LLM: scripts/demo.sh c after configuring ANTHROPIC_API_KEY/OPENAI_API_KEY + VERICODE_CODER_MODEL.")
 
 
+
+def _positive_int(v: str) -> int:
+    import argparse
+    n = int(v)
+    if not 1 <= n <= 10:
+        raise argparse.ArgumentTypeError("--runs must be between 1 and 10")
+    return n
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("demo", choices=["1", "1b", "2", "3", "a", "b", "c", "d", "e", "all", "offline"])
     ap.add_argument("--live", action="store_true")
-    ap.add_argument("--runs", type=int, default=1)
+    ap.add_argument("--runs", type=_positive_int, default=1)
     a = ap.parse_args()
     db.init_db()
     a.demo = {"a": "1", "b": "1b", "d": "2"}.get(a.demo, a.demo)

@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from . import agent, auth, benchmark, db, llm, memory, stale
 from .config import ROOT, settings
@@ -229,10 +229,17 @@ def preflight(req: PreflightReq):
     env = inspect_project(root)
     tid = agent.create_task(root, req.task, "preflight")
     ledger: list = []
-    sel = select_relevant_files(env, req.task)
-    sk, errs = generate_skeleton(req.task, agent.deps_summary(env), agent.outline(env, [s["path"] for s in sel]), tid, ledger)
-    client = TavilyClient()
-    findings = [f.to_dict() for f in verify_skeleton(env, sk, client, live=req.live, task=req.task)]
+    try:
+        sel = select_relevant_files(env, req.task)
+        sk, errs = generate_skeleton(req.task, agent.deps_summary(env), agent.outline(env, [s["path"] for s in sel]), tid, ledger)
+        client = TavilyClient()
+        findings = [f.to_dict() for f in verify_skeleton(env, sk, client, live=req.live, task=req.task)]
+    except Exception as e:  # mark the task failed instead of leaving it queued forever, then report the error
+        with db.tx() as c:
+            c.execute("UPDATE tasks SET status='failed', outcome='failed', finished_at=?, success=0, result_json=? WHERE id=?",
+                      (time.time(), db.dumps({"mode": "preflight", "outcome": "failed", "error": f"{type(e).__name__}: {e}"[:500],
+                                              "tokens": agent.summarize_ledger(ledger)}), tid))
+        raise
     rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
     res = {"selected_files": sel, "skeleton": sk.model_dump(), "skeleton_errors": errs, "findings": findings,
            "briefing": agent.build_briefing(findings), "tokens": agent.summarize_ledger(ledger),
@@ -247,8 +254,11 @@ def preflight(req: PreflightReq):
 @app.post("/api/verify-api")
 def verify_api(req: VerifyApiReq):
     env = inspect_project(resolve_workspace(req.path))
-    pkg = PlannedPackage(package=req.package, ecosystem=req.ecosystem, assumed_version=req.assumed_version,
-                         planned_apis=[PlannedAPI(import_path=req.import_path, name=req.name, type=req.type, arguments=req.arguments)])
+    try:
+        pkg = PlannedPackage(package=req.package, ecosystem=req.ecosystem, assumed_version=req.assumed_version,
+                             planned_apis=[PlannedAPI(import_path=req.import_path, name=req.name, type=req.type, arguments=req.arguments)])
+    except ValidationError as e:
+        raise HTTPException(422, [{"loc": err["loc"], "msg": err["msg"]} for err in e.errors()]) from None
     f = verify_planned_api(env, pkg, pkg.planned_apis[0])
     if req.live:
         from .verify_api import live_verify
@@ -297,7 +307,7 @@ def _task_out(t: dict, full: bool = True) -> dict:
 
 @app.get("/api/tasks")
 def list_tasks(limit: int = 100):
-    return [_task_out(t, full=False) for t in db.rows("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (min(limit, 500),))]
+    return [_task_out(t, full=False) for t in db.rows("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (max(1, min(limit, 500)),))]
 
 
 @app.get("/api/tasks/{tid}")
@@ -359,7 +369,7 @@ def evidence(analysis_id: str | None = None, limit: int = 200):
     if analysis_id:
         rows = db.rows("SELECT e.*, c.claim, c.status FROM evidence e LEFT JOIN claims c ON c.analysis_id=e.analysis_id AND c.claim_id=e.claim_id WHERE e.analysis_id=?", (analysis_id,))
     else:
-        rows = db.rows("SELECT e.*, c.claim, c.status FROM evidence e LEFT JOIN claims c ON c.analysis_id=e.analysis_id AND c.claim_id=e.claim_id ORDER BY e.retrieved_at DESC LIMIT ?", (min(limit, 1000),))
+        rows = db.rows("SELECT e.*, c.claim, c.status FROM evidence e LEFT JOIN claims c ON c.analysis_id=e.analysis_id AND c.claim_id=e.claim_id ORDER BY e.retrieved_at DESC LIMIT ?", (max(1, min(limit, 1000)),))
     return rows
 
 
@@ -402,18 +412,26 @@ def token_analytics():
 
 
 _bench_state: dict = {"running": False, "error": None}
+_bench_lock = threading.Lock()
 
 
 @app.post("/api/benchmarks")
 def start_benchmark(req: BenchReq):
     if _bench_state["running"]:
         raise HTTPException(409, "a benchmark is already running")
+    known = {t["id"] for t in benchmark.load_catalog()}
+    unknown = [t for t in req.task_ids if t not in known]
+    if unknown:
+        raise HTTPException(400, f"unknown benchmark task(s): {', '.join(unknown)}; known: {', '.join(sorted(known))}")
     ps = llm.provider_status()
     if not ps["ready"]:
         raise llm.LLMUnavailable(f"LLM provider '{ps['provider']}' not ready; missing: {', '.join(ps['missing'])}")
+    with _bench_lock:  # claim the slot before starting the thread, so two quick requests cannot both start a run
+        if _bench_state["running"]:
+            raise HTTPException(409, "a benchmark is already running")
+        _bench_state.update(running=True, error=None)
 
     def go():
-        _bench_state.update(running=True, error=None)
         try:
             benchmark.run_benchmark(req.task_ids or None, req.runs, req.max_repairs, req.live)
         except Exception as e:  # surfaced via GET

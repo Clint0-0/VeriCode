@@ -159,7 +159,7 @@ def extract_values(text: str) -> dict:
     pct = PERCENT_RE.findall(text)
     if pct:
         vals["percent"] = pct
-    from .claim_parse import QUANTITY, VERSION_RANGE, features as _f
+    from .claim_parse import QUANTITY, features as _f
     vr = _f(text)["version_ranges"]
     if vr:
         vals["version_range"] = vr

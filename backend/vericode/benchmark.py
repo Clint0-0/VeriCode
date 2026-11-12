@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import statistics
 import time
-from pathlib import Path
 
 from . import db
 from .agent import TaskRunner, create_task, load_catalog

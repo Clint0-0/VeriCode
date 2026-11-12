@@ -13,7 +13,7 @@ from packaging.version import InvalidVersion, Version
 
 from . import jsinspect, memory
 from .pyinspect import PyResolver, SymbolInfo, check_arguments, runtime_introspect
-from .repo_intel import ProjectEnvironment, norm_pkg
+from .repo_intel import ProjectEnvironment
 from .skeleton import PlannedAPI, PlannedPackage, Skeleton
 from .tavily import TavilyClient, domain_of
 

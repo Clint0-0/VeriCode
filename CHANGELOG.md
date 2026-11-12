@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.5 — API edge-case fixes (found by input probing)
+- `POST /api/verify-api` with an empty or invalid identifier returned HTTP 500; it now returns 422 with the reason.
+- A preflight that failed (provider error, mock without a script) left its task `queued` forever, so the UI showed it
+  as running; the task is now marked `failed` with the error.
+- `limit=-1` or `0` on `GET /api/tasks` and `GET /api/evidence` returned every row (SQLite treats a negative LIMIT as
+  none); limits are clamped to at least 1.
+- `POST /api/benchmarks` accepted unknown task ids and stored an empty benchmark; it now returns 400. Two quick
+  requests could both start a benchmark; the slot is now claimed under a lock before the worker starts.
+- `--runs 0` crashed the demo and live-validation CLIs with a division by zero; `--runs` must be 1-10.
+- Removed unused imports. Regression tests: `backend/tests/test_api_edge_cases.py`.
+
 ## 2.3.4 — sandbox image in CI
 - **CI**: new `sandbox-image` job builds `docker/sandbox.Dockerfile` and runs the sandbox tests inside it (16 passed).
   The image is still not published to a registry.
