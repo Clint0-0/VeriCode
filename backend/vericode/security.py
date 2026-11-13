@@ -11,6 +11,7 @@ except ImportError:
 import shutil
 import socket
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -356,6 +357,21 @@ def docker_command(argv: list[str], cwd: Path, ro_mounts: dict[str, Path], name:
     return cmd, inner, isolation
 
 
+def _remove_container(name: str, wait_s: float = 15.0) -> bool:
+    """Kill and remove a container, then wait until it is really gone: with `--rm`, Docker's own removal can still
+    be in progress (and `rm -f` can fail with 'removal already in progress') right after the kill."""
+    subprocess.run(["docker", "kill", name], capture_output=True, timeout=30)
+    deadline = time.time() + wait_s
+    while True:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=30)
+        left = subprocess.run(["docker", "ps", "-aq", "--filter", f"name=^{name}$"], capture_output=True, text=True, timeout=30).stdout.strip()
+        if not left:
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.5)
+
+
 def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, Path]) -> CommandResult:
     import uuid
     name = f"vc-{uuid.uuid4().hex[:10]}"
@@ -372,8 +388,7 @@ def _run_docker(argv: list[str], cwd: Path, timeout: int, ro_mounts: dict[str, P
         p = subprocess.run(cmd + inner, capture_output=True, text=True, timeout=timeout)
         return CommandResult(argv, p.returncode, redact(p.stdout[-20000:]), redact(p.stderr[-20000:]), False, isolation)
     except subprocess.TimeoutExpired as e:
-        subprocess.run(["docker", "kill", name], capture_output=True)
-        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        _remove_container(name)
         out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s (container killed)", True, isolation)
 
