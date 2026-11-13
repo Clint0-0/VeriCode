@@ -18,7 +18,8 @@ SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "bu
 SOURCE_EXT = {".py": "Python", ".ts": "TypeScript", ".tsx": "TypeScript", ".js": "JavaScript",
               ".jsx": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript"}
 MANIFESTS = ["requirements.txt", "pyproject.toml", "poetry.lock", "uv.lock", "package.json",
-             "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsconfig.json"]
+             "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsconfig.json",
+             "Pipfile", "Pipfile.lock", "setup.cfg", "setup.py", "environment.yml", "environment.yaml"]
 FRAMEWORKS = {
     "fastapi": "FastAPI", "django": "Django", "flask": "Flask", "pydantic": "Pydantic",
     "sqlalchemy": "SQLAlchemy", "react": "React", "next": "Next.js", "vue": "Vue",
@@ -41,7 +42,11 @@ class Dependency:
     resolved_in: str | None = None
     installed: str | None = None
     installed_path: str | None = None
-    status: str = "unknown"  # ok | missing | not_installed_env_unavailable | mismatch
+    # package status, separate from the environment status (ProjectEnvironment.environments):
+    # INSTALLED | NOT_INSTALLED (environment available, package absent) | VERSION_MISMATCH (installed differs from the
+    # lockfile or violates the declared range) | UNKNOWN (environment unavailable: installed version not knowable) |
+    # UNRESOLVED (installed version unknown and a lockfile exists that does not list the package)
+    status: str = "UNKNOWN"
 
 
 @dataclass
@@ -72,6 +77,11 @@ class ProjectEnvironment:
     warnings: list[str]
     quality_commands: list[list[str]] = field(default_factory=list)
     conventions: dict = field(default_factory=dict)
+    # per ecosystem: {"status": AVAILABLE|UNAVAILABLE|AMBIGUOUS|CONFIGURATION_ERROR, "interpreter", "source", ...}
+    environments: dict = field(default_factory=dict)
+
+    def env_status(self, ecosystem: str) -> str:
+        return (self.environments.get(ecosystem) or {}).get("status", "UNAVAILABLE")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -118,6 +128,64 @@ def parse_pyproject(text: str) -> dict[str, str]:
     return out
 
 
+def parse_pipfile(text: str) -> dict[str, str]:
+    data = tomllib.loads(text)
+    out: dict[str, str] = {}
+    for sect in ("packages", "dev-packages"):
+        for k, v in (data.get(sect) or {}).items():
+            out.setdefault(k, v if isinstance(v, str) else (v.get("version", "*") if isinstance(v, dict) else "*"))
+    return out
+
+
+def parse_pipfile_lock(text: str) -> dict[str, str]:
+    data = json.loads(text)
+    out: dict[str, str] = {}
+    for sect in ("default", "develop"):
+        for k, v in (data.get(sect) or {}).items():
+            ver = (v or {}).get("version", "") if isinstance(v, dict) else ""
+            if ver.startswith("=="):
+                out.setdefault(k, ver[2:])
+    return out
+
+
+def parse_setup_cfg(text: str) -> dict[str, str]:
+    import configparser
+    cp = configparser.ConfigParser()
+    cp.read_string(text)
+    raw = cp.get("options", "install_requires", fallback="")
+    return {m.group(1): m.group(3).strip() or "*" for line in raw.splitlines() if (m := _REQ_RE.match(line.strip())) and line.strip()}
+
+
+def parse_setup_py(text: str) -> dict[str, str]:
+    """Literal install_requires=[...] only (setup.py is never executed)."""
+    m = re.search(r"install_requires\s*=\s*\[(.*?)\]", text, re.S)
+    if not m:
+        return {}
+    out = {}
+    for spec in re.findall(r"['\"]([^'\"]+)['\"]", m.group(1)):
+        mm = _REQ_RE.match(spec)
+        if mm:
+            out[mm.group(1)] = mm.group(3).strip() or "*"
+    return out
+
+
+def parse_conda_env(text: str) -> dict[str, str]:
+    """environment.yml dependencies (conda and pip sections), without a YAML dependency."""
+    out: dict[str, str] = {}
+    in_deps = False
+    for line in text.splitlines():
+        if re.match(r"^dependencies:\s*$", line):
+            in_deps = True
+            continue
+        if in_deps and re.match(r"^\S", line):
+            break
+        m = re.match(r"^\s*-\s*([A-Za-z0-9][A-Za-z0-9._\-]*)\s*(=?=|>=|<=|~=|<|>)?\s*([^\s#]*)", line) if in_deps else None
+        if m and m.group(1) not in ("pip", "python"):
+            op, ver = m.group(2) or "", m.group(3)
+            out.setdefault(m.group(1), (("==" if op == "=" else op) + ver) if ver else "*")
+    return out
+
+
 def parse_toml_lock(text: str) -> dict[str, str]:
     data = tomllib.loads(text)
     return {p["name"]: p["version"] for p in data.get("package", []) if "name" in p and "version" in p}
@@ -161,6 +229,18 @@ def parse_yarn_lock(text: str) -> dict[str, str]:
 
 
 # --- installed environment inspection (static: reads metadata files only) -----
+def _violates(eco: str, declared: str | None, installed: str) -> bool:
+    """True only when a Python declared range is parseable and clearly excludes the installed version."""
+    if eco != "python" or not declared or declared == "*":
+        return False
+    from packaging.specifiers import InvalidSpecifier, SpecifierSet
+    from packaging.version import InvalidVersion, Version
+    try:
+        return Version(installed) not in SpecifierSet(declared)
+    except (InvalidSpecifier, InvalidVersion):
+        return False
+
+
 def venv_tool(root: Path, name: str) -> Path | None:
     """Executable `name` in the project's .venv: bin/name (POSIX) or Scripts/name.exe (Windows)."""
     for cand in (root / ".venv" / "bin" / name, root / ".venv" / "Scripts" / f"{name}.exe", root / ".venv" / "Scripts" / name):
@@ -262,8 +342,11 @@ def fingerprint(root: Path) -> str:
         if p.name in MANIFESTS or p.suffix in SOURCE_EXT:
             h.update(rel.encode())
             h.update(hashlib.sha1(p.read_bytes()).digest())
-    sp = find_site_packages(root)
-    if sp:
+    from .pyenv import configured_interpreter, find_candidates
+    cands = find_candidates(root, configured_interpreter(root))
+    h.update(json.dumps([[c["source"], c["interpreter"], c["site_packages"]] for c in cands]).encode())
+    sp = Path(cands[0]["site_packages"]) if cands and cands[0]["site_packages"] else None
+    if sp and sp.is_dir():
         for meta in sorted(sp.glob("*.dist-info")):
             h.update(meta.name.encode())
     nm = root / "node_modules"
@@ -277,7 +360,7 @@ def fingerprint(root: Path) -> str:
 def inspect_project(root: Path, use_cache: bool = True) -> ProjectEnvironment:
     root = root.resolve()
     fp = fingerprint(root)
-    key = f"env2:{root}:{fp}"
+    key = f"env3:{root}:{fp}"
     if use_cache:
         cached = db.cache_get(key)
         if cached:
@@ -324,6 +407,13 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
                 elif p.name in ("poetry.lock", "uv.lock"):
                     for k, v in parse_toml_lock(t).items():
                         resolved[("python", norm_pkg(k))] = (v, rel)
+                elif p.name == "Pipfile.lock":
+                    for k, v in parse_pipfile_lock(t).items():
+                        resolved.setdefault(("python", norm_pkg(k)), (v, rel))
+                elif p.name in ("Pipfile", "setup.cfg", "setup.py", "environment.yml", "environment.yaml"):
+                    parser = {"Pipfile": parse_pipfile, "setup.cfg": parse_setup_cfg, "setup.py": parse_setup_py}.get(p.name, parse_conda_env)
+                    for k, v in parser(t).items():
+                        declared.setdefault(("python", norm_pkg(k)), (v, rel))
                 elif p.name == "package.json" and rel.count("/") == 0:
                     deps, scripts = parse_package_json(t)
                     for k, v in deps.items():
@@ -346,10 +436,21 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
             files.append(fi)
             langs[fi.language] += 1
 
-    sp = find_site_packages(root)
+    has_python = any(e == "python" for e, _ in declared) or langs.get("Python")
+    environments: dict[str, dict] = {}
+    sp = None
+    if has_python:
+        from .pyenv import configured_interpreter, discover
+        pe = discover(root, configured_interpreter(root))
+        environments["python"] = pe.to_dict()
+        sp = Path(pe.site_packages) if pe.site_packages and Path(pe.site_packages).is_dir() else None
     inst_py = installed_python(sp) if sp else {}
     nm = root / "node_modules"
     inst_node = installed_node(nm) if nm.is_dir() else {}
+    if any(e == "node" for e, _ in declared):
+        environments["node"] = {"status": "AVAILABLE" if nm.is_dir() else "UNAVAILABLE", "source": "node_modules" if nm.is_dir() else None,
+                                "detail": "" if nm.is_dir() else "node_modules not installed (run npm ci): installed versions unknown"}
+    locked = {e for e, _ in resolved}
 
     deps: list[Dependency] = []
     # lockfiles list transitive packages too: report resolved versions only for declared dependencies
@@ -362,15 +463,20 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
         if (eco, name) in resolved:
             d.resolved, d.resolved_in = resolved[(eco, name)]
         inst = inst_py.get(name) if eco == "python" else inst_node.get(name)
-        env_available = (sp is not None) if eco == "python" else nm.is_dir()
+        env_status = (environments.get(eco) or {}).get("status", "UNAVAILABLE")
         if inst:
             d.installed, d.installed_path = inst
-            d.status = "ok" if not d.resolved or d.resolved == d.installed else "mismatch"
-        else:
-            d.status = "missing" if env_available else "not_installed_env_unavailable"
+            d.status = "VERSION_MISMATCH" if (d.resolved and d.resolved != d.installed) or _violates(eco, d.declared, d.installed) else "INSTALLED"
+        elif env_status in ("AVAILABLE", "AMBIGUOUS"):
+            d.status = "NOT_INSTALLED"
+        else:  # no usable environment: absence proves nothing
+            d.status = "UNRESOLVED" if eco in locked and not d.resolved else "UNKNOWN"
         deps.append(d)
-    if any(d.ecosystem == "python" for d in deps) and not sp:
-        warnings.append("No Python virtualenv (.venv) found: installed versions unknown; declared ranges are NOT installed versions.")
+    pe_status = (environments.get("python") or {}).get("status")
+    if any(d.ecosystem == "python" for d in deps) and pe_status in ("UNAVAILABLE", "CONFIGURATION_ERROR"):
+        warnings.append("Python environment " + ("unavailable" if pe_status == "UNAVAILABLE" else "misconfigured")
+                        + ": declared dependencies were detected, but installed versions could NOT be verified "
+                        "(declared ranges are not installed versions). " + (environments["python"].get("detail") or ""))
 
     fw_names = {d.name for d in deps}
     frameworks = sorted({FRAMEWORKS[n] for n in fw_names if n in FRAMEWORKS})
@@ -397,7 +503,7 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
     return ProjectEnvironment(
         root=str(root), name=root.name, languages=dict(langs), frameworks=frameworks,
         manifests=manifests, dependencies=deps, files=files, test_commands=tests,
-        config_files=config_files, python_site_packages=str(sp) if sp else None,
+        config_files=config_files, python_site_packages=str(sp) if sp else None, environments=environments,
         node_modules=str(nm) if nm.is_dir() else None, fingerprint=fp, warnings=warnings,
         quality_commands=quality, conventions=detect_conventions(root, files, frameworks),
     )
