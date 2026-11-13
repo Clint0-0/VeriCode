@@ -117,7 +117,7 @@ def test_track2_preflight_heatmap_and_coding_task(page, server):
 def test_every_screen_renders_without_console_errors(page, server):
     for hash_, heading in [("dashboard", "Dashboard"), ("workspace", "Coding Workspace"), ("preflight", "Pre-Flight Inspector"),
                            ("stale", "Stale-Answer Detector"), ("evidence", "Evidence Explorer"), ("tokens", "Token Analytics"),
-                           ("history", "Task History"), ("settings", "Settings & Rules")]:
+                           ("history", "Task History"), ("settings", "Settings")]:
         page.goto(f"{server}/#{hash_}")
         page.get_by_role("heading", name=heading, level=1).wait_for()
         page.wait_for_timeout(300)

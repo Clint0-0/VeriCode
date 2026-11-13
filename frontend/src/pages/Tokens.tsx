@@ -1,17 +1,18 @@
 import { useState } from 'react'
+import { Play } from 'lucide-react'
 import { api, fmt, MEASUREMENT_TONE } from '../api'
 import BenchmarkAnalytics from '../components/BenchmarkAnalytics'
-import { Badge, Button, Card, Empty, ErrorBox, Notice, Select, Spinner, Stat, useApi } from '../components/ui'
+import { Badge, Button, Card, DataTable, Empty, ErrorBox, Expand, Notice, Select, Spinner, Stat, useApi } from '../components/ui'
 
 function Bars({ base, veri }: { base: number; veri: number }) {
   const max = Math.max(base, veri, 1)
   return (
     <div className="space-y-1.5">
-      {[['Baseline', base, 'bg-slate-500'], ['VeriCode', veri, 'bg-sky-500']].map(([l, v, c]: any) => (
+      {[['Baseline', base, '#2a78d6'], ['VeriCode', veri, '#1baf7a']].map(([l, v, c]: any) => (
         <div key={l} className="flex items-center gap-2 text-xs">
-          <span className="w-16 text-slate-400">{l}</span>
-          <div className="h-3 flex-1 rounded bg-ink-800"><div className={`h-3 rounded ${c}`} style={{ width: `${(v / max) * 100}%` }} /></div>
-          <span className="w-16 text-right tabular-nums text-slate-300">{fmt.n(v)}</span>
+          <span className="w-16 text-fg-muted">{l}</span>
+          <div className="h-2.5 flex-1 rounded-sm bg-subtle"><div className="h-2.5 rounded-r" style={{ width: `${(v / max) * 100}%`, background: c, minWidth: v ? 2 : 0 }} /></div>
+          <span className="w-16 text-right tabular-nums text-fg">{fmt.n(v)}</span>
         </div>
       ))}
     </div>
@@ -40,133 +41,138 @@ export default function Tokens(_: { param?: string }) {
   const stage = (n: string) => d.by_stage.find((s: any) => s.stage === n)
   const results = (b.data?.results ?? []).filter((r: any) => (kind === 'ACTUAL_PROVIDER_USAGE') === (r.measurement === 'ACTUAL_PROVIDER_USAGE'))
   const latest = results[0]
+  const sources = [
+    ...(pub.data?.results ?? []).map((r: any) => ({ key: `pub:${r.name}`, label: `Published: ${r.name}`, summary: r.summary, labels: r.measurement_labels ?? [], meta: r })),
+    ...(b.data?.results ?? []).filter((r: any) => r.summary?.tasks).map((r: any) => ({ key: `local:${r.id}`, label: `Local run ${r.id} (${fmt.time(r.created_at)})`, summary: r.summary, labels: r.measurement_labels ?? [r.measurement], meta: r })),
+  ]
+  const cur = sources.find((x) => x.key === source) ?? sources[0]
   return (
     <div className="space-y-5">
       {t.est > 0 && <Notice>{t.est} of {t.calls} recorded LLM calls used <b>estimated</b> token counts (mock provider or provider without usage data). Provider-reported counts are used whenever available.</Notice>}
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Input tokens" value={fmt.n(t.input)} />
         <Stat label="Output tokens" value={fmt.n(t.output)} />
         <Stat label="Model calls" value={fmt.n(t.calls)} sub={`${d.cache_entries} cache entries (env/search)`} />
         <Stat label="Est. cost" value={`$${cost.toFixed(4)}`} sub={`real-provider calls only, at $${d.cost_per_mtok.input}/$${d.cost_per_mtok.output} per Mtok`} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card title="Tokens by measurement type">
-          {!d.by_measurement?.length ? <Empty>No LLM calls recorded.</Empty> : d.by_measurement.map((m: any) => (
-            <div key={m.measurement} className="flex items-center justify-between border-t border-ink-700 py-1.5 text-sm first:border-0">
-              <Badge tone={MEASUREMENT_TONE[m.measurement] ?? 'gray'}>{m.measurement}</Badge>
-              <span className="tabular-nums text-slate-300">{fmt.n(m.input)} in / {fmt.n(m.output)} out · {m.calls} calls</span>
+
+      <Card title="Benchmark analytics" description="Paired runs on identical tasks, model, repository snapshot, tests and repair budget. Savings use only repetitions where both runs succeeded."
+        actions={sources.length > 1 ? (
+          <Select size="sm" aria-label="Benchmark source" className="w-72" value={cur?.key ?? ''} onChange={(e) => setSource(e.target.value)}>
+            {sources.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+          </Select>) : undefined}>
+        {!cur ? <Empty>No benchmark with configuration results yet. Published results live in docs/submission/benchmark-results/.</Empty> : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
+              <span>provider <b className="font-medium text-fg">{cur.meta.provider ?? '—'}</b></span>
+              {cur.meta.coder_model && <span>model <b className="font-mono font-medium text-fg">{cur.meta.coder_model}</b></span>}
+              <span>repetitions <b className="font-medium text-fg">{cur.meta.runs_per_mode}</b> per configuration</span>
+              {cur.meta.source_runs?.length > 0 && <span>CI runs <span className="font-mono text-fg">{cur.meta.source_runs.join(', ')}</span></span>}
+              {cur.meta.stopped && <span className="text-warn">stopped early: {cur.meta.stopped}</span>}
             </div>
-          ))}
-          <p className="mt-2 text-xs text-slate-500">ACTUAL_PROVIDER_USAGE = usage reported by the provider API. ESTIMATED = real provider without usage data (chars/4). MOCK = scripted offline demo provider.</p>
+            <BenchmarkAnalytics summary={cur.summary} labels={cur.labels} />
+          </div>
+        )}
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Tokens by measurement type" flush>
+          {!d.by_measurement?.length ? <div className="p-4"><Empty>No LLM calls recorded.</Empty></div> : (
+            <DataTable label="Tokens by measurement type" caption="ACTUAL_PROVIDER_USAGE = usage reported by the provider API · ESTIMATED = real provider without usage data (chars/4) · MOCK = scripted offline demo provider.">
+              <thead><tr><th>Measurement</th><th className="text-right">Input</th><th className="text-right">Output</th><th className="text-right">Calls</th></tr></thead>
+              <tbody>{d.by_measurement.map((m: any) => (
+                <tr key={m.measurement}><td><Badge tone={MEASUREMENT_TONE[m.measurement] ?? 'gray'}>{m.measurement}</Badge></td><td className="text-right tabular-nums">{fmt.n(m.input)}</td><td className="text-right tabular-nums">{fmt.n(m.output)}</td><td className="text-right tabular-nums">{m.calls}</td></tr>
+              ))}</tbody>
+            </DataTable>
+          )}
         </Card>
-        <Card title="Tavily search usage (tracked separately, no token cost invented)">
-          <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-            <div><div className="text-xs text-slate-500">Requests</div><div className="tabular-nums">{fmt.n(d.search?.requests)}</div></div>
-            <div><div className="text-xs text-slate-500">Cache hits</div><div className="tabular-nums">{fmt.n(d.search?.cache_hits)}</div></div>
-            <div><div className="text-xs text-slate-500">Credits</div><div className="tabular-nums">{d.search?.credits ?? 0}</div></div>
-            <div><div className="text-xs text-slate-500">Failures</div><div className="tabular-nums">{fmt.n(d.search?.failures)}</div></div>
+        <Card title="Pipeline stages and search" description="Tavily searches are tracked separately; no token cost is invented for them.">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-[13px] sm:grid-cols-3">
+            {['planner', 'coder', 'repair'].map((s) => (
+              <div key={s}><div className="text-xs text-fg-muted">{s} tokens</div><div className="text-base font-semibold tabular-nums text-fg">{fmt.n(stage(s) ? stage(s).input + stage(s).output : 0)}</div><div className="text-xs text-fg-subtle">{stage(s)?.calls ?? 0} calls</div></div>
+            ))}
+            <div><div className="text-xs text-fg-muted">Verification model tokens</div><div className="text-base font-semibold tabular-nums text-fg">{fmt.n(['claim_extraction', 'claim_judge'].reduce((n, k) => n + (stage(k) ? stage(k).input + stage(k).output : 0), 0))}</div><div className="text-xs text-fg-subtle">API checks are deterministic</div></div>
+            <div><div className="text-xs text-fg-muted">Tavily requests</div><div className="text-base font-semibold tabular-nums text-fg">{fmt.n(d.search?.requests)}</div><div className="text-xs text-fg-subtle">{fmt.n(d.search?.cache_hits)} cache hits · {d.search?.credits ?? 0} credits</div></div>
+            <div><div className="text-xs text-fg-muted">Search failures</div><div className="text-base font-semibold tabular-nums text-fg">{fmt.n(d.search?.failures)}</div></div>
           </div>
         </Card>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {['planner', 'coder', 'repair'].map((s) => <Stat key={s} label={`${s} tokens`} value={fmt.n(stage(s) ? stage(s).input + stage(s).output : 0)} sub={`${stage(s)?.calls ?? 0} calls`} />)}
-        <Stat label="Verification / documentation model tokens" value={fmt.n(['claim_extraction', 'claim_judge'].reduce((n, k) => n + (stage(k) ? stage(k).input + stage(k).output : 0), 0))} sub="API checks, claim extraction and evidence comparison are deterministic (no LLM)" />
-      </div>
 
       {d.by_model?.length > 0 && (
-        <Card title="Usage and cost by model">
-          <table className="w-full text-xs">
-            <thead className="text-left text-slate-500"><tr><th className="py-1">Provider / model</th><th>Measurement</th><th>Input</th><th>Output</th><th>Calls</th><th>Cost (USD)</th><th>Cost basis</th></tr></thead>
+        <Card title="Usage and cost by model" flush>
+          <DataTable label="Usage and cost by model" dense>
+            <thead><tr><th>Provider / model</th><th>Measurement</th><th className="text-right">Input</th><th className="text-right">Output</th><th className="text-right">Calls</th><th className="text-right">Cost (USD)</th><th>Cost basis</th></tr></thead>
             <tbody>{d.by_model.map((m: any, i: number) => (
-              <tr key={i} className="border-t border-ink-700"><td className="py-1 font-mono">{m.provider} / {m.model}</td><td><Badge tone={MEASUREMENT_TONE[m.measurement] ?? 'gray'}>{m.measurement || '—'}</Badge></td><td className="tabular-nums">{fmt.n(m.input)}</td><td className="tabular-nums">{fmt.n(m.output)}</td><td>{m.calls}</td><td className="tabular-nums">{m.cost_usd == null ? '—' : `$${m.cost_usd}`}</td><td className="text-slate-500">{m.cost_basis}</td></tr>
+              <tr key={i}><td className="font-mono">{m.provider} / {m.model}</td><td><Badge tone={MEASUREMENT_TONE[m.measurement] ?? 'gray'}>{m.measurement || '—'}</Badge></td><td className="text-right tabular-nums">{fmt.n(m.input)}</td><td className="text-right tabular-nums">{fmt.n(m.output)}</td><td className="text-right">{m.calls}</td><td className="text-right tabular-nums">{m.cost_usd == null ? '—' : `$${m.cost_usd}`}</td><td className="text-fg-muted">{m.cost_basis}</td></tr>
             ))}</tbody>
-          </table>
+          </DataTable>
         </Card>
       )}
 
-      {(() => {
-        const sources = [
-          ...(pub.data?.results ?? []).map((r: any) => ({ key: `pub:${r.name}`, label: `Published: ${r.name}`, summary: r.summary, labels: r.measurement_labels ?? [], meta: r })),
-          ...(b.data?.results ?? []).filter((r: any) => r.summary?.tasks).map((r: any) => ({ key: `local:${r.id}`, label: `Local run ${r.id} (${fmt.time(r.created_at)})`, summary: r.summary, labels: r.measurement_labels ?? [r.measurement], meta: r })),
-        ]
-        const cur = sources.find((x) => x.key === source) ?? sources[0]
-        return (
-          <Card title="Benchmark analytics (configurations, stages, paths)" actions={sources.length > 1 ? (
-            <Select size="sm" aria-label="Benchmark source" className="w-72" value={cur?.key ?? ''} onChange={(e) => setSource(e.target.value)}>
-              {sources.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-            </Select>) : undefined}>
-            {!cur ? <Empty>No benchmark with configuration results yet. Published results live in docs/submission/benchmark-results/.</Empty> : (
-              <div className="space-y-2">
-                <div className="text-xs text-slate-500">{cur.meta.provider ?? '—'}{cur.meta.coder_model ? ` / ${cur.meta.coder_model}` : ''} · {cur.meta.runs_per_mode} repetition(s) per configuration{cur.meta.source_runs?.length ? ` · CI runs ${cur.meta.source_runs.join(', ')}` : ''}{cur.meta.stopped ? ` · stopped early: ${cur.meta.stopped}` : ''}</div>
-                <BenchmarkAnalytics summary={cur.summary} labels={cur.labels} />
-              </div>
-            )}
-          </Card>
-        )
-      })()}
-
-      <Card title="Benchmark: baseline vs VeriCode (identical tasks, model, repo state, tests, repair budget)" actions={<>
-        <Select size="sm" aria-label="Measurement" className="w-52" value={kind} onChange={(e) => setKind(e.target.value as any)}>
-          <option value="ACTUAL_PROVIDER_USAGE">Real provider results</option>
-          <option value="MOCK_OR_ESTIMATED">Mock / estimated results</option>
-        </Select>
-        <Select size="sm" aria-label="Runs" className="w-36" value={runs} onChange={(e) => setRuns(+e.target.value)}>
-          {[1, 2, 3, 5].map((n) => <option key={n} value={n}>{n} run{n > 1 ? 's' : ''}/mode</option>)}
-        </Select>
-        <Button onClick={start} disabled={b.data?.running}>{b.data?.running ? 'Running…' : 'Run benchmark'}</Button>
-      </>}>
+      <Card title="Benchmark runs: baseline vs VeriCode" description="Identical tasks, model, repository state, tests and repair budget. Mock and estimated results are kept separate from real-provider results."
+        actions={<>
+          <Select size="sm" aria-label="Measurement" className="w-52" value={kind} onChange={(e) => setKind(e.target.value as any)}>
+            <option value="ACTUAL_PROVIDER_USAGE">Real provider results</option>
+            <option value="MOCK_OR_ESTIMATED">Mock / estimated results</option>
+          </Select>
+          <Select size="sm" aria-label="Runs" className="w-36" value={runs} onChange={(e) => setRuns(+e.target.value)}>
+            {[1, 2, 3, 5].map((n) => <option key={n} value={n}>{n} run{n > 1 ? 's' : ''}/mode</option>)}
+          </Select>
+          <Button size="sm" onClick={start} disabled={b.data?.running} icon={<Play aria-hidden className="h-3.5 w-3.5" />}>{b.data?.running ? 'Running…' : 'Run benchmark'}</Button>
+        </>}>
         <ErrorBox error={err ?? (b.data?.error ? { message: b.data.error } : null)} />
         {b.data?.running && <Spinner label="Benchmark running…" />}
         {!latest ? <Empty>{kind === 'ACTUAL_PROVIDER_USAGE' ? 'No real-provider benchmark yet. Configure an LLM key and run one — mock results are kept separately.' : 'No mock/estimated benchmark results.'}</Empty> : (
-          <div className="space-y-4">
-            <div className="text-xs text-slate-500">{latest.id} · {fmt.time(latest.created_at)} · provider {latest.provider}{latest.coder_model ? ` (${latest.coder_model})` : ''} · <Badge tone={MEASUREMENT_TONE[latest.measurement] ?? 'gray'}>{latest.measurement}</Badge> · n={latest.runs_per_mode}/mode · repair budget {latest.repair_budget}</div>
-            {latest.average_savings_pct != null && <div className="text-sm text-slate-300">Average savings across {latest.comparable_tasks}/{latest.total_tasks} comparable tasks: <b className={latest.average_savings_pct >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{latest.average_savings_pct}%</b>{latest.savings_stdev_across_tasks != null ? ` (sd ${latest.savings_stdev_across_tasks} pts)` : ''}</div>}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted"><span className="font-mono">{latest.id}</span><span>{fmt.time(latest.created_at)}</span><span>provider {latest.provider}{latest.coder_model ? ` (${latest.coder_model})` : ''}</span><Badge tone={MEASUREMENT_TONE[latest.measurement] ?? 'gray'}>{latest.measurement}</Badge><span>n={latest.runs_per_mode} per configuration</span><span>repair budget {latest.repair_budget}</span></div>
+            {latest.average_savings_pct != null && <div className="text-[13px] text-fg">Average savings across {latest.comparable_tasks}/{latest.total_tasks} comparable tasks: <b className={latest.average_savings_pct >= 0 ? 'text-ok' : 'text-err'}>{latest.average_savings_pct}%</b>{latest.savings_stdev_across_tasks != null ? ` (sd ${latest.savings_stdev_across_tasks} pts)` : ''}</div>}
             {latest.tasks.map((tk: any) => {
               const B = tk.summary.baseline, V = tk.summary.vericode
               return (
-                <div key={tk.task} className="rounded-md border border-ink-700 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm font-medium text-slate-200">{tk.title}</div>
-                    {tk.token_savings_pct != null ? <span className={`text-lg font-semibold ${tk.token_savings_pct >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{tk.token_savings_pct >= 0 ? `${tk.token_savings_pct}% fewer tokens` : `${-tk.token_savings_pct}% more tokens`}</span> : <span className="text-xs text-amber-300">{tk.savings_note}</span>}
-                  </div>
+                <Expand key={tk.task} head={<>
+                  <span className="font-medium text-fg">{tk.title}</span>
+                  <span className="ml-auto text-xs">{tk.token_savings_pct != null
+                    ? <b className={tk.token_savings_pct >= 0 ? 'text-ok' : 'text-err'}>{tk.token_savings_pct >= 0 ? `${tk.token_savings_pct}% fewer tokens` : `${-tk.token_savings_pct}% more tokens`}</b>
+                    : <span className="text-warn">savings not computed</span>}</span>
+                </>}>
+                  {tk.token_savings_pct == null && <p className="mb-2 text-xs text-warn">{tk.savings_note}</p>}
                   <Bars base={B.total_tokens.mean ?? 0} veri={V.total_tokens.mean ?? 0} />
-                  <table className="mt-3 w-full text-xs">
-                    <thead className="text-left text-slate-500"><tr><th className="py-1">Metric</th><th>Baseline</th><th>VeriCode</th></tr></thead>
+                  <DataTable className="mt-3" dense label={`${tk.task} details`}>
+                    <thead><tr><th>Metric</th><th>Baseline</th><th>VeriCode</th></tr></thead>
                     <tbody>
                       {[
                         ['Final success', fmt.pct(B.success_rate), fmt.pct(V.success_rate)],
                         ['First-pass test success', fmt.pct(B.first_pass_rate), fmt.pct(V.first_pass_rate)],
                         ['Total tokens (mean ± sd)', `${fmt.n(B.total_tokens.mean)} ± ${B.total_tokens.stdev}`, `${fmt.n(V.total_tokens.mean)} ± ${V.total_tokens.stdev}`],
                         ['Input / output tokens', `${fmt.n(B.input_tokens.mean)} / ${fmt.n(B.output_tokens.mean)}`, `${fmt.n(V.input_tokens.mean)} / ${fmt.n(V.output_tokens.mean)}`],
-                        ['Verification overhead tokens (planner/judge)', fmt.n(B.verification_overhead_tokens?.mean ?? 0), fmt.n(V.verification_overhead_tokens?.mean ?? 0)],
+                        ['Planner overhead tokens', fmt.n(B.verification_overhead_tokens?.mean ?? 0), fmt.n(V.verification_overhead_tokens?.mean ?? 0)],
                         ['Paired-run savings', '', (tk.paired_run_savings_pct ?? []).map((x: number) => `${x}%`).join(', ') || '—'],
-                        ['Flagged (deprecated/incompatible) APIs shipped in final code', (tk.flagged_api_usage ?? []).map((x: any) => x.baseline_flagged_apis_used).join(', ') || '—', (tk.flagged_api_usage ?? []).map((x: any) => x.vericode_flagged_apis_used).join(', ') || '—'],
+                        ['Flagged APIs shipped in final code', (tk.flagged_api_usage ?? []).map((x: any) => x.baseline_flagged_apis_used ?? '—').join(', ') || '—', (tk.flagged_api_usage ?? []).map((x: any) => x.vericode_flagged_apis_used ?? '—').join(', ') || '—'],
                         ['LLM calls', B.llm_calls.mean, V.llm_calls.mean],
                         ['Repair attempts', B.repair_attempts.mean, V.repair_attempts.mean],
-                        ['Search calls (Tavily)', B.search_calls.mean, V.search_calls.mean],
                         ['Duration (s)', B.duration_s.mean, V.duration_s.mean],
-                        ['Tokens by stage', Object.entries(B.by_stage).map(([k, v]: any) => `${k}:${v.input + v.output}`).join(' '), Object.entries(V.by_stage).map(([k, v]: any) => `${k}:${v.input + v.output}`).join(' ')],
-                      ].map(([k, x, y]: any) => <tr key={k} className="border-t border-ink-700"><td className="py-1 text-slate-400">{k}</td><td className="tabular-nums">{x}</td><td className="tabular-nums">{y}</td></tr>)}
+                      ].map(([k, x, y]: any) => <tr key={k}><td className="text-fg-muted">{k}</td><td className="tabular-nums">{x}</td><td className="tabular-nums">{y}</td></tr>)}
                     </tbody>
-                  </table>
-                  {tk.detection.flagged !== undefined && tk.detection.detection_rate != null && (
-                    <div className="mt-2 text-xs text-slate-400">Incompatibility detection rate {fmt.pct(tk.detection.detection_rate)} · false-positive rate {fmt.pct(tk.detection.false_positive_rate)} (TP {tk.detection.tp}, FP {tk.detection.fp}, FN {tk.detection.fn}, TN {tk.detection.tn})</div>
+                  </DataTable>
+                  {tk.detection?.detection_rate != null && (
+                    <div className="mt-2 text-xs text-fg-muted">Incompatibility detection rate {fmt.pct(tk.detection.detection_rate)} · false-positive rate {fmt.pct(tk.detection.false_positive_rate)} (TP {tk.detection.tp}, FP {tk.detection.fp}, FN {tk.detection.fn}, TN {tk.detection.tn})</div>
                   )}
-                </div>
+                </Expand>
               )
             })}
           </div>
         )}
       </Card>
 
-      <Card title="Per-task usage">
-        {!d.per_task.length ? <Empty>No tasks recorded.</Empty> : (
-          <table className="w-full text-xs">
-            <thead className="text-left text-slate-500"><tr><th className="py-1">Task</th><th>Mode</th><th>Input</th><th>Output</th><th>Calls</th><th>Repairs</th><th>Searches</th><th>Success</th><th>Measured</th></tr></thead>
+      <Card title="Per-task usage" flush>
+        {!d.per_task.length ? <div className="p-4"><Empty>No tasks recorded.</Empty></div> : (
+          <DataTable label="Per-task usage" dense>
+            <thead><tr><th>Task</th><th>Mode</th><th className="text-right">Input</th><th className="text-right">Output</th><th className="text-right">Calls</th><th className="text-right">Repairs</th><th className="text-right">Searches</th><th>Success</th><th>Measured</th></tr></thead>
             <tbody>{d.per_task.map((r: any) => (
-              <tr key={r.id} className="border-t border-ink-700"><td className="py-1"><a className="font-mono text-sky-300 hover:underline" href={`#history/${r.id}`}>{r.id}</a></td><td>{r.mode}</td><td className="tabular-nums">{fmt.n(r.input)}</td><td className="tabular-nums">{fmt.n(r.output)}</td><td>{r.calls}</td><td>{r.repair_attempts ?? '—'}</td><td>{r.search_calls ?? '—'}</td><td>{r.success ? '✓' : '✗'}</td><td>{r.measurement ? <Badge tone={MEASUREMENT_TONE[r.measurement] ?? 'gray'}>{r.measurement}</Badge> : '—'}</td></tr>
+              <tr key={r.id}><td><a className="font-mono no-underline" href={`#history/${r.id}`}>{r.id}</a></td><td className="font-mono text-fg-muted">{r.mode}</td><td className="text-right tabular-nums">{fmt.n(r.input)}</td><td className="text-right tabular-nums">{fmt.n(r.output)}</td><td className="text-right">{r.calls}</td><td className="text-right">{r.repair_attempts ?? '—'}</td><td className="text-right">{r.search_calls ?? '—'}</td><td>{r.success ? <span className="text-ok">✓</span> : <span className="text-err">✗</span>}</td><td>{r.measurement ? <Badge tone={MEASUREMENT_TONE[r.measurement] ?? 'gray'}>{r.measurement}</Badge> : '—'}</td></tr>
             ))}</tbody>
-          </table>
+          </DataTable>
         )}
       </Card>
     </div>

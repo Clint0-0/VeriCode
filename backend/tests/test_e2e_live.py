@@ -148,7 +148,7 @@ def test_token_analytics_actual_and_not_mock(page, server, facts):
 
 
 def test_remaining_screens_render_and_no_secrets(page, server):
-    for hash_, heading in [("workspace", "Coding Workspace"), ("preflight", "Pre-Flight Inspector"), ("settings", "Settings & Rules")]:
+    for hash_, heading in [("workspace", "Coding Workspace"), ("preflight", "Pre-Flight Inspector"), ("settings", "Settings")]:
         page.goto(f"{server}/#{hash_}")
         page.get_by_role("heading", name=heading, level=1).wait_for()
     page.wait_for_timeout(500)

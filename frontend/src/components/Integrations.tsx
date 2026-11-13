@@ -2,11 +2,11 @@ import { Badge } from './ui'
 
 function Row({ name, ok, value, missing }: { name: string; ok: boolean | null; value: string; missing?: string[] }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink-700 py-2 first:border-0">
-      <span className="text-sm text-slate-300">{name}</span>
-      <span className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line py-2 last:border-b-0">
+      <span className="text-[13px] text-fg-muted">{name}</span>
+      <span className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         <Badge tone={ok === null ? 'gray' : ok ? 'green' : 'amber'}>{value}</Badge>
-        {missing && missing.length > 0 && <span className="rounded border border-ink-700/80 bg-ink-950 px-2 py-0.5 font-mono text-[11px] text-slate-400">missing: {missing.join(', ')}</span>}
+        {missing && missing.length > 0 && <span className="rounded border border-line bg-subtle px-1.5 py-px font-mono text-[11px] text-fg-muted">missing: {missing.join(', ')}</span>}
       </span>
     </div>
   )
