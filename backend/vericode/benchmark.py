@@ -35,6 +35,9 @@ CONFIGURATIONS = ("baseline", "vericode_full", "vericode_adaptive", "context_onl
 DEFAULT_CONFIGURATIONS = ("baseline", "vericode_full", "vericode_adaptive")
 BLOCK_MARKERS = ("HTTP 429", "rate limited", "HTTP 413", "Request too large", "rate_limit", "No LLM provider configured",
                  "No model configured", "not ready")
+# blocks that say nothing about the next run (a too-large prompt is specific to that task and configuration):
+# the batch continues after these; quota/availability blocks stop it
+RUN_SPECIFIC_BLOCKS = ("HTTP 413", "Request too large", "request too large")
 # t critical values (two-sided 95%) for small samples; df >= 30 uses 2.042 -> 1.96 asymptotically
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
        11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
@@ -115,9 +118,21 @@ def make_record(task: dict, rep: int, config: str, result: dict, task_id: str | 
         "api_problems_shipped": (result.get("api_audit") or {}).get("problem_count"),
         "api_problems_detail": [f"{p.get('planned_api')} [{p.get('status')}]" for p in (result.get("api_audit") or {}).get("problems", [])][:8],
         "preflight_findings": result.get("_preflight_findings"),
-        "error": (result.get("error") or "")[:400] or None, "snapshot": snapshot,
+        "error": (result.get("error") or "")[:600] or None, "snapshot": snapshot, "code_version": code_version(),
         "provider": result.get("provider"), "finished_at": time.time(),
     }
+
+
+def code_version() -> str | None:
+    """Commit the run was produced with (GITHUB_SHA in CI, else git), so results from different code are never mixed."""
+    import os
+    import subprocess
+    if os.environ.get("GITHUB_SHA"):
+        return os.environ["GITHUB_SHA"][:12]
+    try:
+        return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=ROOT, capture_output=True, text=True, timeout=5).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def blocked_record(task: dict, rep: int, config: str, reason: str, snapshot: str) -> dict:
@@ -291,7 +306,7 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
             spent += rec["total_tokens"]
         if progress:
             progress(rec)
-        if rec["status"] == "BLOCKED" and stop_on_block:
+        if rec["status"] == "BLOCKED" and stop_on_block and not any(m in (rec.get("error") or "") for m in RUN_SPECIFIC_BLOCKS):
             stop_reason = f"provider blocked a run ({(rec.get('error') or '')[:160]})"
 
     summary = summarize(records, catalog)

@@ -124,6 +124,16 @@ MAX_OUTPUT_BUDGET = 8192
 _TOO_LARGE = re.compile(r"Limit\s+(\d+),\s*Requested\s+(\d+)", re.I)
 
 
+def _http_error(provider: str, status: int, text: str) -> str:
+    """Error text for an HTTP failure; for 413 the provider's numbers are kept even if they sit past the cut-off."""
+    msg = f"{provider} HTTP {status}: {redact(text[:400])}"
+    if status == 413:
+        m = _TOO_LARGE.search(text)
+        if m and m.group(0) not in msg:
+            msg += f" [{m.group(0)}]"
+    return msg
+
+
 def _call_fit(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,
               transport: httpx.BaseTransport | None = None) -> LLMResult:
     """Providers with a per-request token cap that counts the OUTPUT budget (Groq free tier: 'Request too large ...
@@ -266,7 +276,7 @@ def _stream_call(client: httpx.Client, provider: str, model: str, system: str, p
             raise httpx.HTTPStatusError(f"retryable {resp.status_code}", request=req, response=resp)
         if resp.status_code >= 400:
             resp.read()
-            raise LLMUnavailable(f"{provider} HTTP {resp.status_code}: {redact(resp.text[:400])}")
+            raise LLMUnavailable(_http_error(provider, resp.status_code, resp.text))
         text, tin, tout, have_usage, complete, cut = [], 0, 0, False, False, False
         for ev in _sse_events(resp):
             if provider == "anthropic":
@@ -422,7 +432,7 @@ def _call(provider: str, model: str, system: str, prompt: str, max_tokens: int, 
                         _effort_rejected.add(model)  # model does not accept the parameter: drop it, retry once
                         continue
                     if resp.status_code >= 400:
-                        raise LLMUnavailable(f"OpenAI HTTP {resp.status_code}: {redact(resp.text[:400])}")
+                        raise LLMUnavailable(_http_error("OpenAI", resp.status_code, resp.text))
                     _note_limits(resp.headers)
                     d = resp.json()
                     text = d["choices"][0]["message"].get("content") or ""

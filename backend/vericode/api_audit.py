@@ -94,14 +94,18 @@ class _PyUsage(ast.NodeVisitor):
                 self._use(a.name, "", "module", [], node.lineno, kind="import")
 
     def _resolve(self, parts: list[str]) -> tuple[str, str] | None:
+        self.last_member = False
         head = self.alias.get(parts[0])
         if head:
             mod, qual = head
             rest = ".".join(parts[1:])
             return mod, ".".join(p for p in (qual, rest) if p)
-        if parts[0] in self.instances and len(parts) > 1:
+        # members reached through an instance/subclass: the class may define them dynamically (pydantic fields,
+        # attributes set in __init__), so these usages are reported only when found AND problematic (see audit_python)
+        self.last_member = True
+        if parts[0] in self.instances and len(parts) == 2:
             mod, qual = self.instances[parts[0]]
-            return mod, f"{qual}.{'.'.join(parts[1:])}"
+            return mod, f"{qual}.{parts[1]}"
         if parts[0] in ("self", "cls") and self._class and len(parts) == 2:
             base = self.subclass.get(self._class[-1])
             if base and parts[1] not in self.class_methods.get(self._class[-1], set()):
@@ -109,13 +113,28 @@ class _PyUsage(ast.NodeVisitor):
         if parts[0] in self.subclass and len(parts) == 2 and parts[1] not in self.class_methods.get(parts[0], set()):
             mod, qual = self.subclass[parts[0]]
             return mod, f"{qual}.{parts[1]}"
+        self.last_member = False
         return None
 
     def _use(self, module: str, qual: str, typ: str, args: list[str], line: int, kind: str = "use") -> None:
-        self.usages.append({"module": module, "name": qual, "type": typ, "args": args, "line": line, "kind": kind})
+        self.usages.append({"module": module, "name": qual, "type": typ, "args": args, "line": line, "kind": kind,
+                            "member": kind == "use" and getattr(self, "last_member", False)})
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self.class_methods[node.name] = {n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        own: set[str] = set()
+        for n in node.body:  # everything the class body defines: methods, fields, constants, nested classes
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                own.add(n.name)
+            elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name):
+                own.add(n.target.id)
+            elif isinstance(n, ast.Assign):
+                own.update(t.id for t in n.targets if isinstance(t, ast.Name))
+        for n in ast.walk(node):  # attributes assigned on self anywhere in the class
+            if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                for t in (n.targets if isinstance(n, ast.Assign) else [n.target]):
+                    if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+                        own.add(t.attr)
+        self.class_methods[node.name] = own
         for b in node.bases:
             parts = _dotted(b)
             r = self._resolve(parts) if parts else None
@@ -213,6 +232,8 @@ def audit_python(env: ProjectEnvironment, path: str, text: str, lines: set[int] 
             f = verify_planned_api(env, pkg, pkg.planned_apis[0]).to_dict()
         except Exception as e:  # never let the audit crash a run
             f = {"planned_api": f"{u['module']}.{u['name']}", "status": "UNCERTAIN", "explanation": f"audit error: {e}"}
+        if u.get("member") and f.get("status") in ("NOT_FOUND", "UNCERTAIN"):
+            continue  # dynamic member (field, instance attribute, mixin): not evidence of a wrong API
         f.update({"file": path, "line": u["line"], "source": "audit"})
         out.append(f)
     return out

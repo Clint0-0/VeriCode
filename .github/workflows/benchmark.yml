@@ -20,6 +20,9 @@ on:
       resume_from_run:
         description: "Run id of an earlier Benchmark run whose records to continue (completed runs are not repeated)"
         default: ""
+      drop:
+        description: "task:configuration pairs whose earlier records are discarded and re-run (comma-separated)"
+        default: ""
       plan_only:
         description: "Only print the ESTIMATED usage (no LLM calls)"
         type: boolean
@@ -31,6 +34,7 @@ on:
       runs: {type: string, default: "3"}
       max_tokens: {type: string, default: "150000"}
       resume_from_run: {type: string, default: ""}
+      drop: {type: string, default: ""}
       plan_only: {type: boolean, default: false}
 
 permissions:
@@ -90,7 +94,7 @@ jobs:
         working-directory: backend
         run: |
           ../.venv/bin/python -m vericode.bench_cli --runs "${{ inputs.runs }}" --tasks "${{ inputs.tasks }}" \
-            --configurations "${{ inputs.configurations }}" --records ../runs.jsonl --out ../results \
+            --configurations "${{ inputs.configurations }}" --records ../runs.jsonl --out ../results --drop "${{ inputs.drop }}" \
             ${{ inputs.max_tokens != '' && format('--max-tokens {0}', inputs.max_tokens) || '' }}
       - name: Print run records
         if: ${{ always() && !inputs.plan_only }}
@@ -99,6 +103,7 @@ jobs:
           cat runs.jsonl 2>/dev/null || true
           echo "===RECORDS_JSONL_END==="
           cp runs.jsonl results/ 2>/dev/null || true
+          cp runs.dropped.jsonl results/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: ${{ always() && !inputs.plan_only }}
         with:

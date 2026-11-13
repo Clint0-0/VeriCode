@@ -269,3 +269,50 @@ def test_published_results_endpoint(client, tmp_path, monkeypatch):
     monkeypatch.setattr(api, "PUBLISHED_DIR", tmp_path)
     r = client.get("/api/benchmarks/published").json()["results"]
     assert [x["name"] for x in r] == ["2026-11-13"] and r[0]["source_runs"] == [123]
+
+
+def test_audit_does_not_flag_model_fields_or_instance_attributes(sample_project):
+    """Live batch 1 regression: self.sku inside a pydantic model was reported as pydantic.BaseModel.sku NOT_FOUND."""
+    env = inspect_project(SAMPLE)
+    code = ("from pydantic import BaseModel\n\nclass R(BaseModel):\n    sku: str\n    qty: int = 1\n\n"
+            "    def payload(self):\n        self.cache = 1\n        return {'s': self.sku, 'q': self.qty, 'c': self.cache, 'x': self.helper()}\n\n"
+            "    def legacy(self):\n        return self.dict()\n")
+    fs = {f["planned_api"]: f["status"] for f in api_audit.audit_python(env, "r.py", code, None)}
+    assert fs == {"pydantic.BaseModel.dict": "DEPRECATED"}
+
+
+def test_413_numbers_kept_beyond_the_400_char_cut(groq):
+    """Live batch 1 regression: Groq's long 413 body put 'Limit N, Requested M' past the truncated error text."""
+    body = {"error": {"message": "Request too large for model `m` in organization `org_" + "x" * 420 + "` service tier `on_demand` "
+                                 "on tokens per minute (TPM): Limit 8000, Requested 9100, please reduce your message size"}}
+    seen = []
+
+    def h(req):
+        seen.append(json.loads(req.content)["max_tokens"])
+        return httpx.Response(413, json=body) if len(seen) == 1 else httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 5000, "completion_tokens": 9}})
+
+    assert llm.complete("s", "p", "coder", max_tokens=4000, transport=httpx.MockTransport(h)).text == "ok"
+    assert seen == [4000, 4000 - 1100 - 64]
+
+
+def test_request_size_block_does_not_stop_the_batch(tmp_path, sample_project, monkeypatch):
+    def fake(self):
+        if self.mode == "baseline":
+            return {"success": False, "error": "LLMUnavailable: openai HTTP 413: Request too large ... (request too large for this account tier)"}
+        return {"success": True, "tokens": {"input": 10, "output": 5, "total": 15, "calls": 1, "by_stage": {}, "measurement": "MOCK"}}
+    monkeypatch.setattr(agent.TaskRunner, "run", fake)
+    res = benchmark.run_benchmark(["summary"], runs=2, configurations=["baseline", "vericode_adaptive"], records_path=tmp_path / "r.jsonl")
+    assert res["stopped"] is None
+    assert [r["status"] for r in res["records"] if r["configuration"] == "vericode_adaptive"] == ["SUCCESS", "SUCCESS"]
+
+
+def test_drop_discards_records_for_rerun(tmp_path):
+    from vericode import bench_cli
+    path = tmp_path / "runs.jsonl"
+    recs = [_rec("summary", 1, "baseline"), _rec("summary", 1, "vericode_adaptive"), _rec("inv_restock", 1, "vericode_adaptive")]
+    path.write_text("".join(json.dumps(r) + "\n" for r in recs))
+    bench_cli.main(["--report-only", "--records", str(path), "--drop", "inv_restock:vericode_adaptive", "--tasks", "summary,inv_restock"])
+    kept = benchmark.load_records(path)
+    assert [(r["task"], r["configuration"]) for r in kept] == [("summary", "baseline"), ("summary", "vericode_adaptive")]
+    assert len(benchmark.load_records(path.with_suffix(".dropped.jsonl"))) == 1

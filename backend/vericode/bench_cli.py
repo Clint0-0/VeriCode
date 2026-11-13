@@ -118,6 +118,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--report-only", action="store_true", help="summarise existing --records without running")
     ap.add_argument("--out", default="", help="directory for summary.json and report.md")
     ap.add_argument("--no-live-docs", action="store_true", help="pre-flight without Tavily documentation lookups")
+    ap.add_argument("--drop", default="", help="task:configuration pairs whose earlier records are discarded before "
+                                               "resuming (e.g. runs produced by code with a since-fixed defect); they are re-run")
     a = ap.parse_args(argv)
     if not 1 <= a.runs <= 10:
         ap.error("--runs must be between 1 and 10")
@@ -126,6 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     catalog = [t for t in load_catalog() if not ids or t["id"] in ids]
     if ids and len(catalog) != len(ids):
         ap.error(f"unknown task id(s): {sorted(set(ids) - {t['id'] for t in catalog})}")
+
+    if a.drop and a.records and Path(a.records).exists():
+        pairs = {tuple(x.split(":", 1)) for x in a.drop.split(",") if ":" in x}
+        kept, dropped = [], []
+        for r in benchmark.load_records(a.records):
+            (dropped if (r["task"], r["configuration"]) in pairs else kept).append(r)
+        Path(a.records).write_text("".join(json.dumps(r, default=str) + "\n" for r in kept))
+        Path(a.records).with_suffix(".dropped.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in dropped))
+        print(f"dropped {len(dropped)} earlier record(s) for {sorted(pairs)} (kept in {Path(a.records).with_suffix('.dropped.jsonl').name})")
 
     if a.plan:
         rows = [estimate(t, c, a.request_cap) for t in catalog for c in (("baseline",) + tuple(x for x in cfgs if x != "baseline"))]

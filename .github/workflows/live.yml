@@ -34,6 +34,10 @@ on:
         description: "only=benchmark: earlier run id whose records to continue"
         default: ""
         required: false
+      bench_drop:
+        description: "only=benchmark: task:configuration records to discard and re-run"
+        default: ""
+        required: false
 
 permissions:
   contents: read
@@ -56,6 +60,7 @@ jobs:
       runs: ${{ inputs.benchmark_runs }}
       max_tokens: ${{ inputs.bench_max_tokens }}
       resume_from_run: ${{ inputs.bench_resume_from_run }}
+      drop: ${{ inputs.bench_drop }}
       plan_only: ${{ inputs.skip_benchmark == 'plan' }}
 
   live:
