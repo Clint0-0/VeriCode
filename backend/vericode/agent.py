@@ -501,11 +501,11 @@ class TaskRunner:
             diff = "".join("".join(difflib.unified_diff((originals.get(p) or "").splitlines(keepends=True),
                                                         (_read(sandbox / p) or "").splitlines(keepends=True), f"a/{p}", f"b/{p}"))
                            for p in changed_all)
-            result["api_corrections"] = api_corrections(preflight.get("findings", []), diff) if path == "full" else []
             # measurement only, identical for every mode: which third-party API problems does the final code contain?
             ts = time.time()
             final_audit = audit_changes(env, sandbox, changed_all, originals) if changed_all else {"findings": [], "problems": [], "checked": 0}
             self._timed("final_audit", ts)
+            result["api_corrections"] = api_corrections(preflight.get("findings", []), diff, final_audit) if path == "full" else []
             if checks["passed"]:
                 outcome = "succeeded"
             elif changed_all and not checks.get("validated") and not any(a["edit_errors"] for a in attempts[-1:]):
@@ -523,7 +523,8 @@ class TaskRunner:
                 "checks": checks, "sandbox": str(sandbox), "context_files": len(context_paths),
                 "test_pass_rate": _test_pass_rate(checks),
                 "api_audit": {"checked": final_audit.get("checked", 0), "problems": final_audit.get("problems", [])[:20],
-                              "problem_count": len(final_audit.get("problems", []))},
+                              "problem_count": len(final_audit.get("problems", [])),
+                              "errors": final_audit.get("errors", [])[:10]},
                 "original_hashes": {p: _sha(self.project / p) for p in changed_all},
                 "original_contents": {p: _read(self.project / p) for p in changed_all},
             })
@@ -568,10 +569,28 @@ def _test_pass_rate(checks: dict) -> float | None:
 PROBLEM_STATUSES = {"NOT_FOUND", "INCOMPATIBLE", "DEPRECATED"}
 
 
-def api_corrections(findings: list[dict], diff: str) -> list[dict]:
-    """For each problematic planned API, check the ADDED lines of the final diff: was the flagged usage avoided
-    (auto-corrected) or does it still appear? Purely textual, reported as such."""
+_STR = r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\''
+_CODE_NOISE = {"node": re.compile(r'//[^\n]*|/\*.*?\*/|`(?:\\.|[^`\\])*`|' + _STR, re.S),
+               "python": re.compile(r'#[^\n]*|"""(?:.|\n)*?"""|\'\'\'(?:.|\n)*?\'\'\'|' + _STR)}
+
+
+def strip_comments_and_strings(code: str, ecosystem: str = "node", strings: bool = True) -> str:
+    """Blank out comments and string literals (TS/JS and Python) so textual usage checks only see code.
+    Import specifiers stay recognisable: `from "zod"` becomes `from ""`, the imported names remain."""
+    keep = (lambda t: '""') if strings else (lambda t: t)  # strings=False: drop comments only (literal arguments matter)
+    return _CODE_NOISE.get(ecosystem, _CODE_NOISE["node"]).sub(lambda m: keep(m.group(0)) if m.group(0)[:1] in "\"'`" else "", code)
+
+
+def api_corrections(findings: list[dict], diff: str, audit: dict | None = None) -> list[dict]:
+    """For each problematic planned API, check the ADDED lines of the final diff (comments and strings ignored):
+    was the flagged usage avoided (auto-corrected) or does it still appear? When the final compiler audit of the
+    changed files is given, "corrected" is confirmed against it: an API the audit still reports is still_used, and
+    a correction the audit could not check is marked unverified."""
+    audit_names = {re.split(r"[.:]", p.get("planned_api", ""))[-1] for p in (audit or {}).get("problems", [])}
+    audit_failed = bool((audit or {}).get("errors"))
     added = "\n".join(l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++"))
+    code = {eco: strip_comments_and_strings(added, eco) for eco in ("node", "python")}
+    code_lit = {eco: strip_comments_and_strings(added, eco, strings=False) for eco in ("node", "python")}
     out = []
     for f in findings or []:
         if f.get("status") not in PROBLEM_STATUSES:
@@ -589,10 +608,19 @@ def api_corrections(findings: list[dict], diff: str) -> list[dict]:
         if not patterns or not diff:
             out.append({"planned_api": f["planned_api"], "status": f["status"], "result": "not_checked"})
             continue
-        hit = next((p for p in patterns if re.search(p, added)), None)
-        out.append({"planned_api": f["planned_api"], "status": f["status"],
-                    "result": "still_used" if hit else "corrected",
-                    "detail": f"flagged usage found in generated code (/{hit}/)" if hit else "flagged usage absent from generated code"})
+        src = (code_lit if f["status"] == "INCOMPATIBLE" else code)["python" if f.get("ecosystem") == "python" else "node"]
+        hit = next((p for p in patterns if re.search(p, src)), None)
+        entry = {"planned_api": f["planned_api"], "status": f["status"],
+                 "result": "still_used" if hit else "corrected",
+                 "detail": f"flagged usage found in generated code (/{hit}/)" if hit else "flagged usage absent from generated code"}
+        if audit is not None and not hit:
+            if name in audit_names:
+                entry.update(result="still_used", detail="final compiler audit of the changed files still reports this API")
+            elif audit_failed:
+                entry.update(verified=False, detail=entry["detail"] + "; final audit could not run, correction NOT verified")
+            else:
+                entry.update(verified=True, detail=entry["detail"] + "; final compiler audit reports no problem")
+        out.append(entry)
     return out
 
 

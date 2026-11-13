@@ -20,7 +20,7 @@ from .tavily import TavilyClient, domain_of
 RISK_WEIGHTS = {
     "not_found": 60, "rejected_argument": 50, "unsupported_argument": 40, "deprecated": 30,
     "package_missing": 60, "assumed_major_mismatch": 20, "uncertain_argument": 8,
-    "unverifiable": 25, "live_conflict": 15,
+    "unverifiable": 25, "live_conflict": 15, "verification_error": 25,
 }
 
 
@@ -221,6 +221,12 @@ def _verify_ts(env: ProjectEnvironment, pkg: PlannedPackage, api: PlannedAPI, f:
                "construct_signatures": r.get("construct_signatures", []), "deprecated": r.get("deprecated"),
                "call_check": r.get("call_check"), "similar_exports": r.get("similar_exports"), "error": r.get("error"),
                "method": "typescript_compiler_api"}
+    if r.get("internal_error"):  # the checker itself failed: that says nothing about the API
+        f.status, f.api_compatibility, f.verification_confidence = "ERROR", "unknown", "low"
+        f.add_risk("verification_error", (r.get("error") or "")[:300])
+        f.explanation = ("Verification tool failed, so this API was NOT checked (not evidence that it is missing): "
+                         + (r.get("error") or "").strip().splitlines()[0][:240])
+        return f
     if r.get("error") and r.get("resolved") and r.get("member_found") is not False and not r.get("found"):
         f.status = "UNCERTAIN"
         f.add_risk("unverifiable", r["error"])

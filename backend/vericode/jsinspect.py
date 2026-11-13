@@ -7,12 +7,15 @@ installed, a TS-compiler-API check (node subprocess, timeout) type-checks the pl
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from .security import child_env
+
+log = logging.getLogger("vericode.tscheck")
 
 
 @dataclass
@@ -218,9 +221,14 @@ def ts_compiler_check(project_root: Path, module: str, name: str, member: str = 
         p = subprocess.run([shutil.which("node"), str(CHECKER)], input=json.dumps(payload), capture_output=True, text=True,
                            timeout=timeout, cwd=str(project_root), env=child_env(NODE_OPTIONS="--max-old-space-size=1024"))
         out = json.loads(p.stdout or "{}")
+        if not out:
+            out = {"internal_error": True, "error": f"TypeScript checker produced no output (exit {p.returncode}): {p.stderr[-300:]}"}
         out["available"] = True
-        return out
     except subprocess.TimeoutExpired:
-        return {"available": True, "error": f"TypeScript check timed out after {timeout}s"}
+        out = {"available": True, "internal_error": True, "error": f"TypeScript check timed out after {timeout}s"}
     except (ValueError, OSError) as e:
-        return {"available": True, "error": f"TypeScript checker failed: {e}"}
+        out = {"available": True, "internal_error": True, "error": f"TypeScript checker failed: {type(e).__name__}: {e}"}
+    if out.get("internal_error"):  # a failure of the checker itself: full detail server-side, never a verdict on the API
+        log.warning("TypeScript checker failed for %s:%s%s in %s: %s", module, name, f".{member}" if member else "",
+                    project_root, out.get("error"))
+    return out

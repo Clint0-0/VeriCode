@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import difflib
+import logging
 import json
 import shutil
 import subprocess
@@ -26,6 +27,8 @@ from pathlib import Path
 
 from .repo_intel import ProjectEnvironment, norm_pkg
 from .security import child_env
+
+log = logging.getLogger("vericode.audit")
 from .skeleton import PlannedAPI, PlannedPackage
 
 PROBLEM = {"NOT_FOUND", "INCOMPATIBLE", "DEPRECATED"}
@@ -250,9 +253,16 @@ def audit_typescript(env: ProjectEnvironment, files: list[tuple[str, set[int] | 
         p = subprocess.run([node, str(AUDITOR)], input=json.dumps(payload), capture_output=True, text=True, timeout=timeout,
                            cwd=env.root, env=child_env(NODE_OPTIONS="--max-old-space-size=1024"))
         rep = json.loads(p.stdout or "{}")
+        if not rep:
+            rep = {"internal_error": True, "error": f"no output (exit {p.returncode}): {p.stderr[-300:]}"}
     except (subprocess.TimeoutExpired, ValueError, OSError) as e:
-        return [{"planned_api": "(typescript audit)", "status": "UNCERTAIN", "source": "audit", "explanation": f"TypeScript audit failed: {e}"}]
-    out = []
+        rep = {"internal_error": True, "error": f"{type(e).__name__}: {e}"}
+    if rep.get("internal_error"):  # an audit that did not run is reported as such, never as "no problems"
+        log.warning("TypeScript audit failed in %s: %s", env.root, rep.get("error"))
+        return [{"planned_api": "(typescript audit)", "status": "ERROR", "source": "audit",
+                 "explanation": "TypeScript audit failed, generated code was NOT checked: " + str(rep.get("error")).strip().splitlines()[0][:240]}]
+    out = [{"planned_api": "(typescript audit)", "status": "ERROR", "source": "audit", "file": rel,
+            "explanation": f"could not load {rel}: not checked"} for rel in rep.get("unreadable", [])]
     for x in rep.get("findings", []):
         status = "DEPRECATED" if x["kind"] == "deprecated" else "NOT_FOUND" if x.get("code") in (2305, 2307, 2339, 2551, 2614, 2724) else "INCOMPATIBLE"
         out.append({"planned_api": f"{x.get('package') or '?'}:{x.get('api')}", "package": x.get("package"), "ecosystem": "node",
@@ -282,5 +292,8 @@ def audit_changes(env: ProjectEnvironment, sandbox: Path, changed: list[str], or
         ts_env = ProjectEnvironment(**{**env.__dict__, "root": str(sandbox)})
         findings += audit_typescript(ts_env, ts_files, deps_root=env.root)
     problems = [f for f in findings if f.get("status") in PROBLEM]
-    return {"findings": findings, "problems": problems, "checked": len(findings),
-            "summary": f"{len(findings)} third-party API use(s) audited, {len(problems)} problem(s)"}
+    errors = [f for f in findings if f.get("status") == "ERROR"]
+    checked = len(findings) - len(errors)
+    return {"findings": findings, "problems": problems, "checked": checked, "errors": errors,
+            "summary": f"{checked} third-party API use(s) audited, {len(problems)} problem(s)"
+                       + (f", audit ERROR: {len(errors)} not checked" if errors else "")}
