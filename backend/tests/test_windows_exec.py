@@ -132,19 +132,17 @@ def test_child_env_has_no_secrets(monkeypatch):
 def test_link_dir_falls_back_to_junction_on_windows(tmp_path, monkeypatch):
     src = tmp_path / "src nm"
     (src / "pkg").mkdir(parents=True)
-    if not WIN:
-        agent.link_dir(src, tmp_path / "dst")
-        assert (tmp_path / "dst" / "pkg").is_dir()
-        return
-
-    def no_symlink(*a, **k):
-        raise OSError(1314, "A required privilege is not held by the client")
-    monkeypatch.setattr(agent.os, "symlink", no_symlink)
-    agent.link_dir(src, tmp_path / "dst")
-    assert (tmp_path / "dst" / "pkg").is_dir()
+    sandbox = tmp_path / "run copy"
+    sandbox.mkdir()
+    if WIN:
+        def no_symlink(*a, **k):
+            raise OSError(1314, "A required privilege is not held by the client")
+        monkeypatch.setattr(agent.os, "symlink", no_symlink)
+    agent.link_dir(src, sandbox / "node_modules")
+    assert (sandbox / "node_modules" / "pkg").is_dir()
     import shutil
-    shutil.rmtree(tmp_path / "dst")  # removing the sandbox must not delete the real dependency dir
-    assert (src / "pkg").is_dir()
+    shutil.rmtree(sandbox)  # removing the sandbox copy (as cleanup does) must not delete the real dependency dir
+    assert not sandbox.exists() and (src / "pkg").is_dir()
 
 
 # --------------------------------------------------------------------------------------------- full task runs
