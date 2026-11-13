@@ -68,6 +68,8 @@ export const fmt = {
   n: (x: number | null | undefined) => (x == null ? '—' : Number(x).toLocaleString()),
   time: (t: number | null | undefined) => (t ? new Date(t * 1000).toLocaleString() : '—'),
   pct: (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`),
+  /** ISO timestamp -> 'YYYY-MM-DD HH:MM' (UTC as stored); non-ISO values are returned unchanged. */
+  ts: (s: string | null | undefined) => (!s ? '—' : /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(s) ? s.slice(0, 16).replace('T', ' ') : s),
 }
 
 export const MEASUREMENT_TONE: Record<string, string> = { ACTUAL_PROVIDER_USAGE: 'green', ESTIMATED: 'amber', MOCK: 'amber' }

@@ -1,97 +1,138 @@
-import React, { useCallback, useEffect, useRef, useState, type ReactNode, type ChangeEvent, type KeyboardEvent } from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState, type ReactNode, type ChangeEvent, type KeyboardEvent } from 'react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleAlert, Info, Loader2 } from 'lucide-react'
 import { api, ApiError } from '../api'
 
-export function Card({ title, actions, children, className = '' }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+/* ------------------------------------------------------------------ layout */
+
+/** Bordered panel. Use for distinct objects (a table, a form); plain sections use <Section>. */
+export function Card({ title, actions, children, className = '', flush = false, description }: {
+  title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; flush?: boolean; description?: ReactNode
+}) {
   return (
-    <section className={`rounded-lg border border-ink-700 bg-ink-900 ${className}`}>
+    <section className={`min-w-0 rounded-lg border border-line bg-surface shadow-raised ${className}`}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-2.5">
-          <h2 className="text-sm font-semibold text-slate-200">{title}</h2>
-          <div className="flex items-center gap-2">{actions}</div>
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-2.5">
+          <div className="min-w-0">
+            <h2 className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-fg">{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}
+          </div>
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className={flush ? '' : 'p-4'}>{children}</div>
     </section>
   )
 }
 
-const TONES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
-  green: {
-    bg: 'bg-emerald-950/40',
-    text: 'text-emerald-300',
-    dot: 'bg-emerald-400',
-    border: 'border-emerald-800/40',
-  },
-  amber: {
-    bg: 'bg-ink-850',
-    text: 'text-slate-200',
-    dot: 'bg-amber-400',
-    border: 'border-ink-700',
-  },
-  red: {
-    bg: 'bg-rose-950/40',
-    text: 'text-rose-300',
-    dot: 'bg-rose-400',
-    border: 'border-rose-800/40',
-  },
-  blue: {
-    bg: 'bg-sky-950/40',
-    text: 'text-sky-300',
-    dot: 'bg-sky-400',
-    border: 'border-sky-800/40',
-  },
-  gray: {
-    bg: 'bg-ink-950/80',
-    text: 'text-slate-400',
-    dot: 'bg-slate-500',
-    border: 'border-ink-700/80',
-  },
-}
-const STATUS_TONE: Record<string, string> = {
-  VERIFIED_LOCAL: 'green', VERIFIED_LIVE: 'green', CURRENT_SUPPORTED: 'green', succeeded: 'green', ok: 'green',
-  STALE: 'amber', DEPRECATED: 'amber', POTENTIALLY_STALE: 'amber', UNCERTAIN: 'amber', CONFLICTING_EVIDENCE: 'amber', UNVERIFIED: 'amber',
-  INCOMPATIBLE: 'red', NOT_FOUND: 'red', CONTRADICTED: 'red', failed: 'red',
-  NOT_CHECKED: 'gray', NOT_APPLICABLE: 'gray', queued: 'gray',
-}
-
-export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
-  const t = tone ?? STATUS_TONE[String(children)] ?? (String(children).startsWith('running') ? 'blue' : 'gray')
-  const style = TONES[t] ?? TONES.gray
+/** Unboxed section with a small heading: keeps pages from becoming a stack of cards. */
+export function Section({ title, actions, children, className = '', description }: { title: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; description?: ReactNode }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium tracking-tight ${style.bg} ${style.text} ${style.border}`}>
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
-      <span>{children}</span>
-    </span>
+    <section className={`min-w-0 ${className}`}>
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-[13px] font-semibold text-fg">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      </div>
+      {children}
+    </section>
   )
 }
 
-export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'green' | 'amber' | 'red' }) {
-  const color = tone === 'green' ? 'text-emerald-300' : tone === 'amber' ? 'text-slate-100' : tone === 'red' ? 'text-rose-300' : 'text-slate-100'
+export function Toolbar({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`flex flex-wrap items-center gap-2 ${className}`}>{children}</div>
+}
+
+/** Table wrapper: horizontal scroll inside the panel (never the page), consistent header styling. */
+export function DataTable({ children, caption, className = '', dense = false, label }: { children: ReactNode; caption?: ReactNode; className?: string; dense?: boolean; label?: string }) {
   return (
-    <div className="rounded-lg border border-ink-700 bg-ink-900 px-4 py-3">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
+    <div className={`min-w-0 overflow-x-auto ${className}`}>
+      <table aria-label={label} className={`w-full border-collapse text-left ${dense ? 'text-xs' : 'text-[13px]'} [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-subtle/60 [&_th]:px-3 [&_th]:py-2 [&_th]:text-[11px] [&_th]:font-medium [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-fg-subtle [&_td]:border-b [&_td]:border-line [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-subtle/50`}>
+        {children}
+        {caption && <caption className="caption-bottom px-3 pt-2 pb-1 text-left text-xs text-fg-subtle">{caption}</caption>}
+      </table>
     </div>
   )
 }
 
-export function Button({ children, onClick, disabled, variant = 'primary', type = 'button', title }: {
-  children: ReactNode; onClick?: () => void; disabled?: boolean; variant?: 'primary' | 'ghost' | 'danger'; type?: 'button' | 'submit'; title?: string
+/* ------------------------------------------------------------------ status */
+
+const TONES: Record<string, string> = {
+  green: 'border-ok/25 bg-ok-soft text-ok',
+  amber: 'border-warn/25 bg-warn-soft text-warn',
+  red: 'border-err/25 bg-err-soft text-err',
+  blue: 'border-info/20 bg-info-soft text-info',
+  gray: 'border-line bg-subtle text-fg-muted',
+}
+const DOT: Record<string, string> = { green: 'bg-ok', amber: 'bg-warn', red: 'bg-err', blue: 'bg-info', gray: 'bg-fg-subtle' }
+export const STATUS_TONE: Record<string, string> = {
+  VERIFIED_LOCAL: 'green', VERIFIED_LIVE: 'green', CURRENT_SUPPORTED: 'green', succeeded: 'green', ok: 'green', SUCCESS: 'green',
+  STALE: 'amber', DEPRECATED: 'amber', POTENTIALLY_STALE: 'amber', UNCERTAIN: 'amber', CONFLICTING_EVIDENCE: 'amber', UNVERIFIED: 'amber', partial: 'amber', BLOCKED: 'amber',
+  INCOMPATIBLE: 'red', NOT_FOUND: 'red', CONTRADICTED: 'red', failed: 'red', FAILED: 'red',
+  NOT_CHECKED: 'gray', NOT_APPLICABLE: 'gray', queued: 'gray',
+}
+export function toneOf(status: unknown): string {
+  const s = String(status)
+  return STATUS_TONE[s] ?? (s.startsWith('running') ? 'blue' : 'gray')
+}
+
+/** Status badge. Status codes (UPPER_CASE) render in monospace; a dot keeps identity off colour alone. */
+export function Badge({ children, tone, title }: { children: ReactNode; tone?: string; title?: string }) {
+  const t = tone ?? toneOf(children)
+  const code = typeof children === 'string' && /^[A-Z0-9_]+$/.test(children)
+  return (
+    <span title={title} className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded border px-1.5 py-px text-[11px] font-medium leading-5 ${code ? 'font-mono tracking-tight' : ''} ${TONES[t] ?? TONES.gray}`}>
+      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[t] ?? DOT.gray}`} />
+      <span className="truncate">{children}</span>
+    </span>
+  )
+}
+
+export function StatusDot({ tone = 'gray', label }: { tone?: string; label: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+      <span aria-hidden className={`h-2 w-2 rounded-full ${DOT[tone] ?? DOT.gray}`} />
+      {label}
+    </span>
+  )
+}
+
+/** Compact metric. */
+export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'green' | 'amber' | 'red' }) {
+  const color = tone === 'green' ? 'text-ok' : tone === 'red' ? 'text-err' : tone === 'amber' ? 'text-warn' : 'text-fg'
+  return (
+    <div className="min-w-0 rounded-lg border border-line bg-surface px-3.5 py-3 shadow-raised">
+      <div className="text-xs font-medium leading-snug text-fg-muted">{label}</div>
+      <div className={`mt-1 text-[22px] font-semibold leading-tight tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="mt-1 text-xs leading-snug text-fg-subtle">{sub}</div>}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ controls */
+
+export function Button({ children, onClick, disabled, variant = 'primary', type = 'button', title, size = 'md', icon }: {
+  children?: ReactNode; onClick?: () => void; disabled?: boolean; variant?: 'primary' | 'ghost' | 'danger' | 'quiet'; type?: 'button' | 'submit'; title?: string; size?: 'sm' | 'md'; icon?: ReactNode
 }) {
-  const v = variant === 'primary' ? 'bg-sky-600 hover:bg-sky-500 text-white' : variant === 'danger' ? 'bg-rose-600/80 hover:bg-rose-500 text-white' : 'border border-ink-600 hover:bg-ink-800 text-slate-200'
+  const v = {
+    primary: 'border-accent bg-accent text-white hover:bg-accent-strong hover:border-accent-strong',
+    ghost: 'border-line-strong bg-surface text-fg hover:bg-subtle',
+    quiet: 'border-transparent bg-transparent text-fg-muted hover:bg-hover hover:text-fg',
+    danger: 'border-err/30 bg-surface text-err hover:bg-err-soft',
+  }[variant]
   return (
     <button type={type} title={title} onClick={onClick} disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${v}`}>
-      {children}
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-[13px]'} ${v}`}>
+      {icon}{children}
     </button>
   )
 }
 
 export function Spinner({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div role="status" className="flex items-center gap-2 text-sm text-slate-400">
-      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-600 border-t-sky-400" />
+    <div role="status" className="flex items-center gap-2 py-2 text-[13px] text-fg-muted">
+      <Loader2 aria-hidden className="h-4 w-4 animate-spin text-accent" />
       {label}
     </div>
   )
@@ -101,53 +142,119 @@ export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null
   const e = error as ApiError
   const hint = e.code === 'llm_unavailable' ? ' Configure an LLM provider in .env (see Settings).' : e.code === 'network' ? ' Is the backend running on :8000?' : ''
-  return <div role="alert" className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{e.message ?? String(error)}{hint}</div>
-}
-
-export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-md border border-dashed border-ink-600 px-4 py-8 text-center text-sm text-slate-500">{children}</div>
-}
-
-export function Notice({ children, tone = 'amber' }: { children: ReactNode; tone?: 'amber' | 'blue' }) {
-  const isAmber = tone === 'amber'
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-ink-700/80 bg-ink-900/90 px-3.5 py-2.5 text-xs text-slate-300 shadow-sm backdrop-blur-sm">
-      <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${isAmber ? 'bg-amber-400/15 text-amber-300' : 'bg-sky-400/15 text-sky-300'}`}>
-        <span className="text-[10px] font-semibold leading-none">ℹ</span>
-      </div>
-      <div className="flex-1 leading-relaxed [&>b]:font-semibold [&>b]:text-slate-100">
-        {children}
-      </div>
+    <div role="alert" className="flex items-start gap-2 rounded-md border border-err/25 bg-err-soft px-3 py-2 text-[13px] text-err">
+      <CircleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+      <span className="min-w-0 break-words">{e.message ?? String(error)}{hint}</span>
     </div>
   )
 }
 
-export function Mono({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <pre className={`overflow-auto whitespace-pre-wrap rounded-md border border-ink-700 bg-ink-950 p-3 font-mono text-xs leading-relaxed text-slate-300 ${className}`}>{children}</pre>
+export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-line-strong px-4 py-8 text-center text-[13px] text-fg-muted">
+      <div>{children}</div>
+      {action}
+    </div>
+  )
 }
 
+export function Notice({ children, tone = 'amber' }: { children: ReactNode; tone?: 'amber' | 'blue' }) {
+  const amber = tone === 'amber'
+  const Icon = amber ? AlertTriangle : Info
+  return (
+    <div className={`flex items-start gap-2.5 rounded-md border px-3 py-2 text-[13px] leading-relaxed ${amber ? 'border-warn/25 bg-warn-soft text-fg' : 'border-info/20 bg-info-soft text-fg'}`}>
+      <Icon aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 ${amber ? 'text-warn' : 'text-info'}`} />
+      <div className="min-w-0 flex-1 [&>b]:font-semibold">{children}</div>
+    </div>
+  )
+}
+
+/** Monospace block for logs, briefings and JSON. */
+export function Mono({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <pre className={`overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-subtle/70 p-3 font-mono text-xs leading-relaxed text-fg ${className}`}>{children}</pre>
+}
+export const CodeBlock = Mono
+
+/** Unified diff with a +/- gutter and per-file headers. */
 export function Diff({ text }: { text: string }) {
   if (!text) return <Empty>No changes.</Empty>
+  let oldNo = 0, newNo = 0
+  const rows = text.split('\n').map((l, i) => {
+    if (l.startsWith('+++') || l.startsWith('---')) {
+      return l.startsWith('+++') ? <div key={i} className="sticky left-0 border-y border-line bg-subtle px-3 py-1.5 font-sans text-xs font-medium text-fg">{l.replace(/^\+\+\+ (b\/)?/, '')}</div> : null
+    }
+    if (l.startsWith('@@')) {
+      const m = /@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(l)
+      if (m) { oldNo = +m[1]; newNo = +m[2] }
+      return <div key={i} className="bg-info-soft/60 px-3 py-0.5 text-info">{l}</div>
+    }
+    const add = l.startsWith('+'), del = l.startsWith('-')
+    const o = add ? '' : String(oldNo++), n = del ? '' : String(newNo++)
+    return (
+      <div key={i} className={`grid grid-cols-[3rem_3rem_1.25rem_1fr] ${add ? 'bg-diff-add text-diff-add-fg' : del ? 'bg-diff-del text-diff-del-fg' : 'text-fg'}`}>
+        <span className="select-none pr-2 text-right text-fg-subtle">{o}</span>
+        <span className="select-none pr-2 text-right text-fg-subtle">{n}</span>
+        <span aria-hidden className="select-none text-center">{add ? '+' : del ? '−' : ' '}</span>
+        <span className="whitespace-pre pr-3">{add || del ? l.slice(1) : l.slice(1) || ' '}</span>
+      </div>
+    )
+  })
   return (
-    <pre className="overflow-auto rounded-md border border-ink-700 bg-ink-950 p-3 font-mono text-xs leading-relaxed">
-      {text.split('\n').map((l, i) => (
-        <div key={i} className={l.startsWith('+') && !l.startsWith('+++') ? 'bg-emerald-500/10 text-emerald-300' : l.startsWith('-') && !l.startsWith('---') ? 'bg-rose-500/10 text-rose-300' : l.startsWith('@@') ? 'text-sky-400' : 'text-slate-400'}>{l || ' '}</div>
-      ))}
-    </pre>
+    <div className="overflow-auto rounded-md border border-line bg-surface font-mono text-xs leading-relaxed" role="region" aria-label="Unified diff">
+      <div className="min-w-max">{rows}</div>
+    </div>
   )
 }
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-xs font-medium text-slate-400">{label}</span>
+    <label className="block min-w-0">
+      <span className="mb-1 block text-xs font-medium text-fg-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-fg-subtle">{hint}</span>}
     </label>
   )
 }
 
-export const inputCls = 'w-full rounded-md border border-ink-600 bg-ink-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none'
+export const inputCls = 'w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-[13px] text-fg placeholder:text-fg-subtle shadow-raised focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:bg-subtle disabled:text-fg-muted'
+
+export function Checkbox({ checked, onChange, children, title }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; title?: string }) {
+  return (
+    <label className="inline-flex items-center gap-2 text-[13px] text-fg" title={title}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>{children}</span>
+    </label>
+  )
+}
+
+/** Segmented control (radio group) for small, mutually exclusive choices. */
+export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[]; label: string }) {
+  const name = useId()
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-md border border-line-strong bg-subtle p-0.5">
+      {options.map((o) => (
+        <label key={o.value} className={`flex cursor-pointer items-center gap-1.5 rounded px-2.5 py-1 text-[13px] ${value === o.value ? 'bg-surface font-medium text-fg shadow-raised' : 'text-fg-muted hover:text-fg'}`}>
+          <input type="radio" name={name} className="sr-only" checked={value === o.value} onChange={() => onChange(o.value)} />
+          {o.label}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+export function Tabs<T extends string>({ value, onChange, tabs, label }: { value: T; onChange: (v: T) => void; tabs: { id: T; label: ReactNode; count?: number }[]; label: string }) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-line">
+      {tabs.map((t) => (
+        <button key={t.id} type="button" role="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)}
+          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] ${value === t.id ? 'border-accent font-medium text-fg' : 'border-transparent text-fg-muted hover:text-fg'}`}>
+          {t.label}{t.count != null && <span className="ml-1.5 rounded bg-subtle px-1.5 text-[11px] text-fg-muted">{t.count}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 /** Fetch helper with loading/error state and optional polling. */
 export function useApi<T>(path: string | null, pollMs?: number) {
@@ -180,15 +287,17 @@ export function useApi<T>(path: string | null, pollMs?: number) {
 export function Expand({ head, children, defaultOpen = false }: { head: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-md border border-ink-700 bg-ink-850">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ink-800">
-        <span className={`text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
+    <div className={`rounded-md border bg-surface ${open ? 'border-line-strong' : 'border-line'}`}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-subtle/60">
+        <ChevronRight aria-hidden className={`h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform ${open ? 'rotate-90' : ''}`} />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{head}</div>
       </button>
-      {open && <div className="border-t border-ink-700 px-3 py-3 text-sm">{children}</div>}
+      {open && <div className="border-t border-line px-3 py-3 text-[13px]">{children}</div>}
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ select (listbox) */
 
 export interface SelectOption {
   value: string
@@ -222,11 +331,7 @@ function parseOptions(children: ReactNode): SelectOption[] {
       if (node.type === 'option') {
         const p = node.props as any
         const val = p.value !== undefined ? String(p.value) : (typeof p.children === 'string' || typeof p.children === 'number' ? String(p.children) : '')
-        options.push({
-          value: val,
-          label: p.children ?? val,
-          disabled: !!p.disabled,
-        })
+        options.push({ value: val, label: p.children ?? val, disabled: !!p.disabled })
       } else if (node.props && (node.props as any).children) {
         visit((node.props as any).children)
       }
@@ -237,17 +342,7 @@ function parseOptions(children: ReactNode): SelectOption[] {
 }
 
 export function Select({
-  value,
-  onChange,
-  children,
-  className = '',
-  size = 'md',
-  disabled = false,
-  'aria-label': ariaLabel,
-  id,
-  name,
-  title,
-  placeholder = 'Select…',
+  value, onChange, children, className = '', size = 'md', disabled = false, 'aria-label': ariaLabel, id, name, title, placeholder = 'Select…',
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
@@ -273,9 +368,7 @@ export function Select({
   useEffect(() => {
     if (!isOpen) return
     const handleClickOutside = (e: MouseEvent | PointerEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false)
     }
     document.addEventListener('pointerdown', handleClickOutside)
     return () => document.removeEventListener('pointerdown', handleClickOutside)
@@ -284,9 +377,7 @@ export function Select({
   useEffect(() => {
     if (isOpen && highlightIndex >= 0 && listRef.current) {
       const item = listRef.current.children[highlightIndex] as HTMLElement
-      if (item?.scrollIntoView) {
-        item.scrollIntoView({ block: 'nearest' })
-      }
+      if (item?.scrollIntoView) item.scrollIntoView({ block: 'nearest' })
     }
   }, [isOpen, highlightIndex])
 
@@ -305,7 +396,6 @@ export function Select({
       }
       return
     }
-
     if (e.key === 'Escape') {
       e.preventDefault()
       setIsOpen(false)
@@ -335,90 +425,34 @@ export function Select({
   }
 
   const isSm = size === 'sm'
-
   return (
-    <div
-      ref={containerRef}
-      className={`relative ${className.includes('w-') ? '' : 'inline-block'} ${className}`}
-    >
+    <div ref={containerRef} className={`relative ${className.includes('w-') ? '' : 'inline-block'} ${className}`}>
       <button
-        type="button"
-        id={id}
-        aria-label={ariaLabel}
-        title={title}
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        onKeyDown={handleKeyDown}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        className={`group flex w-full items-center justify-between gap-2 rounded-md border bg-ink-950 font-normal text-slate-200 shadow-sm transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
-          isSm ? 'px-2.5 py-1 text-xs' : 'px-3 py-2 text-sm'
-        } ${
-          isOpen
-            ? 'border-sky-500/80 ring-1 ring-sky-500/30 bg-ink-900/90'
-            : 'border-ink-600/80 hover:border-ink-500 hover:bg-ink-900/60 focus-visible:border-sky-500 focus-visible:ring-1 focus-visible:ring-sky-500/40 focus-visible:outline-none'
-        }`}
+        type="button" id={id} aria-label={ariaLabel} title={title} disabled={disabled}
+        onClick={() => !disabled && setIsOpen(!isOpen)} onKeyDown={handleKeyDown}
+        aria-haspopup="listbox" aria-expanded={isOpen}
+        className={`flex w-full items-center justify-between gap-2 rounded-md border bg-surface text-left text-fg shadow-raised transition-colors disabled:cursor-not-allowed disabled:bg-subtle disabled:opacity-60 ${
+          isSm ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-[13px]'
+        } ${isOpen ? 'border-accent ring-2 ring-accent/15' : 'border-line-strong hover:border-fg-subtle'}`}
       >
-        <span className="truncate text-left flex-1">{displayLabel}</span>
-        <svg
-          className={`shrink-0 transition-transform duration-200 text-slate-400 group-hover:text-slate-300 ${
-            isSm ? 'h-3.5 w-3.5' : 'h-4 w-4'
-          } ${isOpen ? 'rotate-180 text-sky-400' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth="2"
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-        </svg>
+        <span className="min-w-0 flex-1 truncate">{displayLabel}</span>
+        <ChevronDown aria-hidden className={`h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div
-          ref={listRef}
-          role="listbox"
-          tabIndex={-1}
-          className={`absolute top-full z-50 mt-1 max-h-60 min-w-full w-max max-w-xs sm:max-w-md overflow-y-auto rounded-lg border border-ink-700 bg-ink-900/98 p-1 shadow-xl shadow-black/60 backdrop-blur-md ring-1 ring-white/5 focus:outline-none ${
-            alignRight ? 'right-0' : 'left-0'
-          }`}
-        >
+        <div ref={listRef} role="listbox" tabIndex={-1}
+          className={`absolute top-full z-50 mt-1 max-h-64 w-max min-w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-overlay focus:outline-none ${alignRight ? 'right-0' : 'left-0'}`}>
           {options.map((opt, i) => {
             const isSelected = opt.value === strVal
             const isHighlighted = i === highlightIndex
             return (
-              <button
-                key={`${opt.value}-${i}`}
-                type="button"
-                role="option"
-                data-value={opt.value}
-                aria-selected={isSelected}
-                disabled={opt.disabled}
-                onClick={() => handleSelect(opt.value)}
-                onMouseEnter={() => setHighlightIndex(i)}
-                className={`group flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors duration-100 ${
-                  opt.disabled
-                    ? 'cursor-not-allowed opacity-40'
-                    : isSelected
-                    ? 'bg-ink-800 text-sky-300 font-medium'
-                    : isHighlighted
-                    ? 'bg-ink-800/70 text-slate-100'
-                    : 'text-slate-300 hover:bg-ink-800/60 hover:text-white'
-                }`}
-              >
-                <span className="truncate flex-1">{opt.label}</span>
-                {isSelected && (
-                  <svg
-                    className="h-3.5 w-3.5 shrink-0 text-sky-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth="2.5"
-                    stroke="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                  </svg>
-                )}
+              <button key={`${opt.value}-${i}`} type="button" role="option" data-value={opt.value} aria-selected={isSelected}
+                disabled={opt.disabled} onClick={() => handleSelect(opt.value)} onMouseEnter={() => setHighlightIndex(i)}
+                className={`flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-[13px] ${
+                  opt.disabled ? 'cursor-not-allowed opacity-40' : isHighlighted ? 'bg-subtle text-fg' : 'text-fg'
+                } ${isSelected ? 'font-medium' : ''}`}>
+                <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                {isSelected && <Check aria-hidden className="h-3.5 w-3.5 shrink-0 text-accent" />}
               </button>
             )
           })}
@@ -426,16 +460,8 @@ export function Select({
       )}
 
       {/* keeps `name` for form submission only; hidden from assistive tech so each dropdown is one control */}
-      <select
-        ref={selectRef}
-        aria-hidden="true"
-        name={name}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        tabIndex={-1}
-        className="sr-only absolute inset-0 -z-10 h-full w-full opacity-0 pointer-events-none"
-      >
+      <select ref={selectRef} aria-hidden="true" name={name} value={value} onChange={onChange} disabled={disabled} tabIndex={-1}
+        className="pointer-events-none absolute inset-0 -z-10 h-full w-full opacity-0 sr-only">
         {children}
       </select>
     </div>
