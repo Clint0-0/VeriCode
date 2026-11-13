@@ -4,7 +4,10 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
-import resource
+try:
+    import resource
+except ImportError:
+    resource = None
 import shutil
 import socket
 import subprocess
@@ -123,10 +126,12 @@ def _check_allowed(argv: list[str]) -> None:
 
 
 def _limits() -> None:  # pragma: no cover - runs in child
-    resource.setrlimit(resource.RLIMIT_CPU, (300, 300))
-    # no RLIMIT_AS: V8/WebAssembly reserve large virtual ranges; real memory caps come from the docker backend
-    resource.setrlimit(resource.RLIMIT_FSIZE, (200 * 1024**2, 200 * 1024**2))
-    os.setsid()
+    if resource is not None:
+        resource.setrlimit(resource.RLIMIT_CPU, (300, 300))
+        # no RLIMIT_AS: V8/WebAssembly reserve large virtual ranges; real memory caps come from the docker backend
+        resource.setrlimit(resource.RLIMIT_FSIZE, (200 * 1024**2, 200 * 1024**2))
+    if hasattr(os, "setsid"):
+        os.setsid()
 
 
 _NET_ISOLATION: bool | None = None
@@ -231,11 +236,16 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
         "CI": "1",
     }
     venv = cwd / ".venv" / "bin"
+    if not venv.is_dir() and (cwd / ".venv" / "Scripts").is_dir():
+        venv = cwd / ".venv" / "Scripts"
     if venv.is_dir():
-        env["PATH"] = f"{venv}:{env['PATH']}"
+        env["PATH"] = f"{venv}{os.pathsep}{env['PATH']}"
         env["VIRTUAL_ENV"] = str(venv.parent)
         if Path(argv[0]).name in ("python", "pytest"):
-            argv = [str(venv / Path(argv[0]).name)] + argv[1:]
+            exe = venv / Path(argv[0]).name
+            if not exe.exists() and (venv / f"{Path(argv[0]).name}.exe").exists():
+                exe = venv / f"{Path(argv[0]).name}.exe"
+            argv = [str(exe)] + argv[1:]
     full = argv
     isolation = "process: rlimits+scrubbed-env+timeout"
     if network_isolation_available():
@@ -245,7 +255,7 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
         isolation += " (network NOT restricted)"
     try:
         p = subprocess.run(full, cwd=str(cwd), env=env, capture_output=True, text=True,
-                           timeout=timeout, preexec_fn=_limits)
+                           timeout=timeout, preexec_fn=_limits if os.name != "nt" else None)
         return CommandResult(argv, p.returncode, redact(p.stdout[-20000:]), redact(p.stderr[-20000:]), False, isolation)
     except subprocess.TimeoutExpired as e:
         out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")

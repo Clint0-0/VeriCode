@@ -190,7 +190,7 @@ def tsc_check(project_root: Path, snippet: str, timeout: int = 30) -> dict:
         return {"available": False}
     try:
         p = subprocess.run([node, "-e", TSC_SCRIPT, str(ts), snippet], cwd=str(project_root), capture_output=True,
-                           text=True, timeout=timeout, env={"PATH": "/usr/bin:/bin"})
+                           text=True, timeout=timeout, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")})
         return {"available": True, "diagnostics": json.loads(p.stdout or "[]")}
     except Exception as e:
         return {"available": True, "error": str(e)}
