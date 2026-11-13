@@ -78,6 +78,10 @@ jobs:
           npm ci --prefix demos/ts_orders --no-audit --no-fund
           npm ci --prefix demos/ts_project --no-audit --no-fund
           npm ci --prefix tools/ts-checker --no-audit --no-fund
+      - name: py_ledger environment (Windows venv layout)
+        run: |
+          python -m venv demos/py_ledger/.venv
+          demos/py_ledger/.venv/Scripts/python.exe -m pip install -q -r demos/py_ledger/requirements.txt
       - name: Windows launch tests
         run: python -m pytest -q -p no:cacheprovider backend/tests -k "windows_exec or ts_verification or preflight_env" -rs
 
