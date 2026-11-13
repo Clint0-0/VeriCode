@@ -161,6 +161,14 @@ def parse_yarn_lock(text: str) -> dict[str, str]:
 
 
 # --- installed environment inspection (static: reads metadata files only) -----
+def venv_tool(root: Path, name: str) -> Path | None:
+    """Executable `name` in the project's .venv: bin/name (POSIX) or Scripts/name.exe (Windows)."""
+    for cand in (root / ".venv" / "bin" / name, root / ".venv" / "Scripts" / f"{name}.exe", root / ".venv" / "Scripts" / name):
+        if cand.is_file():
+            return cand
+    return None
+
+
 def find_site_packages(root: Path) -> Path | None:
     for venv in (".venv", "venv", "env"):
         for sp in sorted((root / venv).glob("lib/python*/site-packages")):
@@ -377,10 +385,9 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
         tests.append(["npm", "run", "typecheck"])
 
     quality: list[list[str]] = []
-    venv_bin = root / ".venv" / "bin"
-    if (venv_bin / "ruff").exists():
+    if venv_tool(root, "ruff"):
         quality.append(["python", "-m", "ruff", "check", "."])
-    if (venv_bin / "mypy").exists():
+    if venv_tool(root, "mypy"):
         quality.append(["python", "-m", "mypy", "."])
     if "lint" in scripts:
         quality.append(["npm", "run", "lint"])

@@ -13,7 +13,7 @@ from packaging.version import InvalidVersion, Version
 
 from . import jsinspect, memory
 from .pyinspect import PyResolver, SymbolInfo, check_arguments, runtime_introspect
-from .repo_intel import ProjectEnvironment
+from .repo_intel import ProjectEnvironment, venv_tool
 from .skeleton import PlannedAPI, PlannedPackage, Skeleton
 from .tavily import TavilyClient, domain_of
 
@@ -134,8 +134,8 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
                     info = alt
                     break
         if not info.found and not info.migration_hint:
-            py = Path(env.root) / ".venv" / "bin" / "python"
-            if py.exists():
+            py = venv_tool(Path(env.root), "python")  # .venv/bin/python or .venv\\Scripts\\python.exe
+            if py:
                 rt = runtime_introspect(py, api.import_path, api.name)
                 f.verification_method.append("runtime_isolated(subprocess -I, timeout)")
                 if rt.get("found"):

@@ -209,3 +209,34 @@ def test_benchmark_counts_setup_errors_as_blocked_not_failed():
          "error_detail": {"category": "dependencies_not_installed"}}
     assert benchmark.classify(r) == "BLOCKED"
     assert benchmark.classify({"success": False, "error": "AssertionError"}) == "FAILED"
+
+
+@pytest.mark.parametrize("layout", ["posix", "windows"])
+def test_venv_tools_found_in_both_layouts(tmp_path, layout):
+    """Runtime introspection and ruff/mypy checks looked only in .venv/bin (never ran on Windows)."""
+    from vericode.repo_intel import venv_tool
+    d = tmp_path / ".venv" / ("bin" if layout == "posix" else "Scripts")
+    d.mkdir(parents=True)
+    for n in ("python", "ruff"):
+        (d / (n if layout == "posix" else f"{n}.exe")).write_text("")
+    assert venv_tool(tmp_path, "python") and venv_tool(tmp_path, "ruff") and venv_tool(tmp_path, "mypy") is None
+
+
+def test_runtime_introspection_uses_windows_venv_python(tmp_path, monkeypatch):
+    from vericode import verify_api
+    from vericode.repo_intel import inspect_project
+    proj = tmp_path / "p"
+    sp = proj / ".venv" / "Lib" / "site-packages" / "mypkg"
+    sp.mkdir(parents=True)
+    (sp / "__init__.py").write_text("")
+    (sp.parent / "mypkg-1.0.dist-info").mkdir()
+    (sp.parent / "mypkg-1.0.dist-info" / "METADATA").write_text("Name: mypkg\nVersion: 1.0\n")
+    (proj / ".venv" / "Scripts").mkdir(parents=True)
+    (proj / ".venv" / "Scripts" / "python.exe").write_text("")
+    (proj / "requirements.txt").write_text("mypkg==1.0\n")
+    seen = {}
+    monkeypatch.setattr(verify_api, "runtime_introspect", lambda py, m, n: seen.setdefault("py", py) and {"found": True, "params": []})
+    from vericode.skeleton import PlannedAPI, PlannedPackage
+    pkg = PlannedPackage(package="mypkg", ecosystem="python", planned_apis=[PlannedAPI(import_path="mypkg", name="dynamic_attr", type="function")])
+    f = verify_api.verify_planned_api(inspect_project(proj), pkg, pkg.planned_apis[0])
+    assert seen["py"].name == "python.exe" and f.status != "NOT_FOUND"

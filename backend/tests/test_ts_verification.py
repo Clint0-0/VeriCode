@@ -134,3 +134,11 @@ def test_correction_is_confirmed_by_final_audit():
     assert bad["result"] == "still_used"
     unk = agent.api_corrections(f, d, {"problems": [], "errors": [{"status": "ERROR"}]})[0]
     assert unk["result"] == "corrected" and unk["verified"] is False and "NOT verified" in unk["detail"]
+
+
+def test_stale_detector_local_evidence_ignores_checker_crash(env, monkeypatch):
+    from vericode import local_evidence
+    monkeypatch.setattr(jsinspect, "ts_checker_available", lambda: True)
+    monkeypatch.setattr(jsinspect, "ts_compiler_check", lambda *a, **k: {"resolved": True, "found": False, **CRASH})
+    dep = env.dep("zod")
+    assert local_evidence._resolve(env, dep, "z.object") is None  # no evidence, not "z.object does not exist"

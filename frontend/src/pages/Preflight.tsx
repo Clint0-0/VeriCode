@@ -37,6 +37,7 @@ export default function Preflight(_: { param?: string }) {
   const findings: any[] = res?.findings ?? []
   const verified = findings.filter((f) => String(f.status).startsWith('VERIFIED')).length
   const problems = findings.filter((f) => PROBLEMS.includes(f.status)).length
+  const toolErrors = findings.filter((f) => f.status === 'ERROR').length
 
   return (
     <div className="space-y-5">
@@ -84,10 +85,11 @@ export default function Preflight(_: { param?: string }) {
         {busy === 'preflight' && <div className="mt-3"><Spinner label="Planning and verifying…" /></div>}
         {res && (
           <div className="mt-4 space-y-5">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className={`grid grid-cols-2 gap-3 ${toolErrors ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
               <Stat label="Planned APIs" value={findings.length} />
               <Stat label="Verified" value={verified} tone={verified ? 'green' : undefined} />
               <Stat label="Problems" value={problems} sub="not found · incompatible · deprecated" tone={problems ? 'red' : undefined} />
+              {toolErrors > 0 && <Stat label="Not checked" value={toolErrors} sub="verification tool error" tone="amber" />}
               <Stat label="Planner tokens" value={res.tokens?.total ?? '—'} sub={res.tokens?.measurement} />
             </div>
             <div>

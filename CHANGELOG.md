@@ -16,6 +16,10 @@
 - Correction tracking ignores comments and string literals, and "corrected" is confirmed against the final
   compiler audit (`verified: true/false`); an API the audit still reports is `still_used`.
 - CI: real zod 3.23.8 verification tests on Linux and `windows-latest`.
+- Also fixed: Python runtime introspection and ruff/mypy detection looked only in `.venv/bin` (Windows venvs use
+  `.venv\Scripts\*.exe`), so dynamic attributes were reported NOT_FOUND on Windows; the stale-answer detector's
+  local evidence treated a TypeScript checker crash as "symbol not found"; the Pre-Flight page now shows a
+  "Not checked" count for ERROR findings.
 
 ## 2.4.1 — Windows process sandbox fix (branch `fix/windows-process-sandbox-winerror2`)
 - **Fixed `FileNotFoundError: [WinError 2]` right after the CODER stage on Windows.** `run_command` passed

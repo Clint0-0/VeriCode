@@ -125,7 +125,7 @@ def _resolve(env: ProjectEnvironment, dep, sym: str):
             return None
         name, _, member = sym.partition(".")
         r = jsinspect.ts_compiler_check(Path(env.root), dep.name, name, member)
-        if r.get("error") and not r.get("resolved"):
-            return None
+        if r.get("internal_error") or (r.get("error") and not r.get("resolved")):
+            return None  # checker failure: no local evidence either way (never "not found")
         return bool(r.get("found")), r.get("deprecated"), None, r.get("location")
     return None
