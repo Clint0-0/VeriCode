@@ -15,9 +15,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CHROME = next((p for p in ("/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser") if os.path.exists(p)), None)
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
 except ImportError:  # pragma: no cover
-    sync_playwright = None
+    sync_playwright = expect = None
 
 pytestmark = [pytest.mark.e2e, pytest.mark.skipif(sync_playwright is None or CHROME is None or not (ROOT / "frontend" / "dist").is_dir(),
                                                   reason="playwright/chromium/frontend build not available")]
@@ -56,6 +56,13 @@ def page(server):
         b.close()
 
 
+
+def choose(page, label: str, value: str) -> None:
+    """Pick an option in the custom dropdown the way a user does: open it, click the option."""
+    page.get_by_role("button", name=label, exact=True).click()
+    page.get_by_role("listbox").locator(f'[role="option"][data-value="{value}"]').click()
+    expect(page.get_by_role("listbox")).to_have_count(0)
+
 def test_login_required_then_token_url(page, server):
     page.goto(f"{server}/#dashboard")
     page.get_by_label("Access token").wait_for()
@@ -86,7 +93,7 @@ def test_track1_combined_installed_source(page, server):
     page.goto(f"{server}/#stale")
     page.get_by_label("LLM answer").fill("In Pydantic, use the @validator decorator to validate fields.")
     page.get_by_label("Offline fixture (labelled, reproducible)").check()
-    page.get_by_label("Installed packages workspace").select_option("sample_project")
+    choose(page, "Installed packages workspace", "sample_project")
     page.get_by_role("button", name="Extract & verify claims").click()
     page.get_by_text("installed_source", exact=True).first.wait_for(timeout=30000)
     page.get_by_title("claim_001: CONTRADICTED").wait_for()
@@ -94,13 +101,13 @@ def test_track1_combined_installed_source(page, server):
 
 def test_track2_preflight_heatmap_and_coding_task(page, server):
     page.goto(f"{server}/#preflight")
-    page.get_by_label("Demo task").select_option("users")
+    choose(page, "Demo task", "users")
     page.get_by_role("button", name="Run pre-flight").click()
     heat = page.get_by_role("table", name="API confidence heatmap")
     heat.wait_for(timeout=60000)
     assert "INCOMPATIBLE" in heat.inner_text() and "DEPRECATED" in heat.inner_text()
     page.goto(f"{server}/#workspace")
-    page.get_by_label("Demo task").select_option("users")
+    choose(page, "Demo task", "users")
     page.get_by_role("button", name="Run task").click()
     page.get_by_text("auto-corrected 3/3 flagged APIs").wait_for(timeout=120000)
     page.get_by_role("button", name="Apply to workspace").wait_for()

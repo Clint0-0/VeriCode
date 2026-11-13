@@ -251,11 +251,8 @@ export function Select({
   }, [isOpen, highlightIndex])
 
   const handleSelect = (val: string) => {
-    if (selectRef.current) {
-      selectRef.current.value = val
-      selectRef.current.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-    onChange?.({ target: { value: val } } as any)
+    // call onChange exactly once; the hidden native select follows `value` on the next render
+    if (val !== strVal) onChange?.({ target: { value: val } } as any)
     setIsOpen(false)
   }
 
@@ -306,6 +303,8 @@ export function Select({
     >
       <button
         type="button"
+        id={id}
+        aria-label={ariaLabel}
         title={title}
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -352,6 +351,7 @@ export function Select({
                 key={`${opt.value}-${i}`}
                 type="button"
                 role="option"
+                data-value={opt.value}
                 aria-selected={isSelected}
                 disabled={opt.disabled}
                 onClick={() => handleSelect(opt.value)}
@@ -385,10 +385,10 @@ export function Select({
         </div>
       )}
 
+      {/* keeps `name` for form submission only; hidden from assistive tech so each dropdown is one control */}
       <select
         ref={selectRef}
-        aria-label={ariaLabel}
-        id={id}
+        aria-hidden="true"
         name={name}
         value={value}
         onChange={onChange}

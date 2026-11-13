@@ -158,8 +158,8 @@ test('settings save sends persisted fields with CSRF and shows confirmation', as
   })
   window.location.hash = 'settings'
   render(<App />)
-  const sel = await screen.findByLabelText('Execution sandbox')
-  await userEvent.selectOptions(sel, 'docker')
+  await userEvent.click(await screen.findByRole('button', { name: 'Execution sandbox' }))
+  await userEvent.click(screen.getByRole('option', { name: /docker/i }))
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   expect(await screen.findByText(/persist across restarts/)).toBeInTheDocument()
   expect(body.sandbox_backend).toBe('docker')
