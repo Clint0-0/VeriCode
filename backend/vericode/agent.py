@@ -278,12 +278,18 @@ class TaskRunner:
     def run(self) -> dict:
         t0 = time.time()
         self.timings: dict[str, float] = {}
-        plan = resolve_mode(self.mode)
-        result: dict = {"mode": self.mode, "configuration": plan, "provider": settings.effective_provider()}
+        result: dict = {"mode": self.mode, "provider": settings.effective_provider()}
+        try:
+            plan = resolve_mode(self.mode)
+        except ValueError:
+            plan = "invalid"
+        result["configuration"] = plan
         preflight: dict = {}
         originals: dict[str, str | None] = {}
         audit_on = plan == "vericode_adaptive"
         try:
+            if plan == "invalid":
+                raise ValueError(f"unknown mode {self.mode!r}; expected one of {MODES}")
             env = inspect_project(self.project)
             self.event("inspect", f"Inspected project: {len(env.files)} source files, {len(env.dependencies)} dependencies",
                        {"languages": env.languages, "frameworks": env.frameworks, "warnings": env.warnings})

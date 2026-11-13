@@ -133,7 +133,10 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= a.runs <= 10:
         ap.error("--runs must be between 1 and 10")
     ids = [x for x in a.tasks.split(",") if x]
-    cfgs = tuple(x for x in a.configurations.split(",") if x)
+    cfgs = tuple(dict.fromkeys(x for x in a.configurations.split(",") if x))
+    bad = [c for c in cfgs if c not in benchmark.CONFIGURATIONS]
+    if bad:
+        ap.error(f"unknown configuration(s) {bad}; expected {list(benchmark.CONFIGURATIONS)}")
     catalog = [t for t in load_catalog() if not ids or t["id"] in ids]
     if ids and len(catalog) != len(ids):
         ap.error(f"unknown task id(s): {sorted(set(ids) - {t['id'] for t in catalog})}")
@@ -158,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if a.report_only:
+        if not a.records or not Path(a.records).is_file():
+            ap.error(f"--report-only needs an existing --records file (got {a.records!r})")
         records = benchmark.load_records(a.records)
         models = sorted({m for r in records for m in (r.get("models") or [])})
         result = {"summary": benchmark.summarize(records, catalog), "records": records, "created_at": max((r.get("finished_at") or 0 for r in records), default=time.time()),

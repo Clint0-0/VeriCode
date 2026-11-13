@@ -15,6 +15,9 @@
 - Fixes from the live runs: audit false positive on pydantic model fields; HTTP 413 limits parsed beyond the error
   cut (fit-and-retry); request-size blocks no longer stop a batch; resumed records de-duplicated; timed-out Docker
   containers waited on until removed (flaky CI check).
+- Bug hunt: unknown `--configurations` exit cleanly; duplicate configurations run once; `--report-only` refuses a
+  missing records file; an invalid task mode marks the task failed (was stuck `queued`); TypeScript audit names a
+  missing package without quotes; boolean settings reject values other than true/false/yes/no/on/off/1/0.
 - Dashboard: benchmark analytics (configurations, stages, input/output, success vs tokens, size/language,
   fast vs full) with MOCK/ESTIMATED warnings; `GET /api/benchmarks/published`.
 

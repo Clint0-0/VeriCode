@@ -270,7 +270,7 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
                   max_total_tokens: int | None = None, max_runs: int | None = None, stop_on_block: bool = True,
                   progress=None) -> dict:
     catalog = [t for t in load_catalog() if not task_ids or t["id"] in task_ids]
-    cfgs = tuple(configurations or DEFAULT_CONFIGURATIONS)
+    cfgs = tuple(dict.fromkeys(configurations or DEFAULT_CONFIGURATIONS))  # de-duplicated, order kept
     unknown = [c for c in cfgs if c not in CONFIGURATIONS]
     if unknown:
         raise ValueError(f"unknown configuration(s) {unknown}; expected {CONFIGURATIONS}")

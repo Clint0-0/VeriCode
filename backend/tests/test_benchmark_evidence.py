@@ -329,3 +329,46 @@ def test_load_records_keeps_last_record_per_run(tmp_path):
 def test_provider_account_ids_are_redacted():
     from vericode.security import redact
     assert redact("in organization `org_01m6vgesmhe2xs91b47gjn77c8` service") == "in organization `org_[redacted]` service"
+
+
+# ------------------------------------------------------------------------------------------------ bug hunt 2026-11-13
+def test_cli_rejects_unknown_configuration_and_missing_records(capsys):
+    from vericode import bench_cli
+    with pytest.raises(SystemExit) as e:
+        bench_cli.main(["--plan", "--configurations", "turbo"])
+    assert e.value.code == 2 and "unknown configuration" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        bench_cli.main(["--report-only", "--records", "/nonexistent/runs.jsonl"])
+    assert e.value.code == 2
+
+
+def test_duplicate_configurations_run_once(tmp_path, sample_project):
+    r = benchmark.run_benchmark(["summary"], runs=1, configurations=["baseline", "baseline", "vericode_adaptive", "vericode_adaptive"])
+    assert sorted(x["configuration"] for x in r["records"]) == ["baseline", "vericode_adaptive"]
+
+
+def test_invalid_mode_marks_task_failed_not_queued():
+    from vericode import db
+    p = SAMPLE.resolve()
+    tid = agent.create_task(p, "x", "turbo")
+    r = agent.TaskRunner(tid, p, "x", "turbo").run()
+    assert not r["success"] and "unknown mode" in r["error"]
+    assert db.row("SELECT status FROM tasks WHERE id=?", (tid,))["status"] == "failed"
+
+
+def test_typescript_audit_names_missing_package_without_quotes(tmp_path):
+    if not (TS / "node_modules").is_dir():
+        pytest.skip("ts demo not installed")
+    work = tmp_path / "ts"
+    (work / "src").mkdir(parents=True)
+    (work / "tsconfig.json").write_text((TS / "tsconfig.json").read_text())
+    (work / "src" / "c.ts").write_text("import { thing } from 'not-installed-pkg'\nexport const c = thing()\n")
+    env = inspect_project(TS)
+    fs = api_audit.audit_typescript(type(env)(**{**env.__dict__, "root": str(work)}), [("src/c.ts", None)], deps_root=str(TS))
+    assert fs and fs[0]["status"] == "NOT_FOUND" and "'" not in fs[0]["planned_api"]
+
+
+def test_boolean_settings_are_strict(client):
+    assert client.put("/api/settings", json={"adaptive_execution": "maybe"}).status_code == 400
+    assert client.put("/api/settings", json={"adaptive_execution": "off"}).json()["adaptive_execution"] is False
+    assert client.put("/api/settings", json={"adaptive_execution": True}).json()["adaptive_execution"] is True

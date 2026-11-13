@@ -189,8 +189,11 @@ class Settings:
                 if k in ("max_repair_attempts",) and not 0 <= int(v) <= 5:
                     raise ValueError("max_repair_attempts must be 0-5")
                 cast = self.EDITABLE[k]
-                if cast is bool:
-                    v = v if isinstance(v, bool) else str(v).lower() in ("1", "true", "yes", "on")
+                if cast is bool and not isinstance(v, bool):
+                    low = str(v).strip().lower()
+                    if low not in ("1", "true", "yes", "on", "0", "false", "no", "off"):
+                        raise ValueError(f"{k} must be true or false")
+                    v = low in ("1", "true", "yes", "on")
                 setattr(self, k, cast(v))
             elif k == "half_lives" and isinstance(v, dict):
                 for cat, days in v.items():

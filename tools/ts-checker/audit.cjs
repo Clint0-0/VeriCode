@@ -128,7 +128,10 @@ async function main() {
         let n = node
         while (n && !ts.isImportDeclaration(n)) n = n.parent
         const spec = n && ts.isStringLiteral(n.moduleSpecifier) ? n.moduleSpecifier.text : null
-        if (spec && !spec.startsWith('.')) pkg = { name: spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0] }
+        if (spec && !spec.startsWith('.')) {
+          pkg = { name: spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0] }
+          api = node && (ts.isIdentifier(node) || ts.isImportSpecifier(node)) ? node.getText(sf) : spec
+        }
       } else if ([2339, 2551].includes(d.code)) {
         let n = node
         while (n && !ts.isPropertyAccessExpression(n)) n = n.parent
