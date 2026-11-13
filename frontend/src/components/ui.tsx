@@ -262,19 +262,21 @@ export function useApi<T>(path: string | null, pollMs?: number) {
   const [error, setError] = useState<unknown>(null)
   const [loading, setLoading] = useState(!!path)
   const alive = useRef(true)
+  const current = useRef(path)  // a response is applied only if it belongs to the path still being shown
   const load = useCallback(async () => {
     if (!path) return
     try {
       const d = await api<T>(path)
-      if (alive.current) { setData(d); setError(null) }
+      if (alive.current && current.current === path) { setData(d); setError(null) }
     } catch (e) {
-      if (alive.current) setError(e)
+      if (alive.current && current.current === path) setError(e)
     } finally {
-      if (alive.current) setLoading(false)
+      if (alive.current && current.current === path) setLoading(false)
     }
   }, [path])
   useEffect(() => {
     alive.current = true
+    if (current.current !== path) { current.current = path; setData(null); setError(null) }  // never show another run's data
     setLoading(!!path)
     load()
     if (!pollMs) return () => { alive.current = false }

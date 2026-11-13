@@ -35,6 +35,14 @@ export function ExecutionError({ detail }: { detail: any }) {
   )
 }
 
+const VERDICT: Record<string, string> = { VERIFIED_LOCAL: 'verified', VERIFIED_LIVE: 'verified', STALE: 'verified', DEPRECATED: 'verified', INCOMPATIBLE: 'verified', NOT_FOUND: 'not_found', ERROR: 'error' }
+/** Same counting as the backend summary (verify_api.summarize), for reports stored before it existed. */
+export function summarizeFindings(findings: any[]) {
+  const m: Record<string, number> = { planned: findings.length, verified: 0, not_found: 0, uncertain: 0, error: 0 }
+  for (const f of findings) m[VERDICT[f.status] ?? 'uncertain'] += 1
+  return m
+}
+
 export function TokenTable({ tokens }: { tokens: any }) {
   if (!tokens) return <Empty>No token usage recorded.</Empty>
   return (
@@ -159,7 +167,7 @@ export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => v
           {pf.findings && (
             <Card title="Pre-flight report" description="Planned third-party APIs verified against the installed packages before code generation.">
               <div className="mb-4 grid gap-4 sm:grid-cols-3">
-                <KV k="Planned APIs" v={pf.findings.length} />
+                <KV k="APIs" v={(() => { const m = pf.summary ?? summarizeFindings(pf.findings); return `${m.planned} planned · ${m.verified} verified · ${m.not_found} not found · ${m.uncertain} uncertain · ${m.error} errors` })()} />
                 <KV k="Tavily calls" v={`${pf.tavily_calls ?? 0}${pf.tavily_configured ? '' : ' (no key: live verification not performed)'}`} />
                 <KV k="Rules saved to memory" v={pf.rules_saved?.length ?? 0} />
               </div>

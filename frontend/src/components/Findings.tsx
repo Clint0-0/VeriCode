@@ -95,12 +95,12 @@ export function FindingsList({ findings }: { findings: any[] }) {
                     </button>
                   </td>
                   <td className="px-2 py-2 font-mono text-xs text-fg">{f.package}</td>
-                  <td className="px-2 py-2 font-mono text-xs text-fg-muted">{f.installed_version ?? 'not installed'}</td>
+                  <td className="px-2 py-2 font-mono text-xs text-fg-muted">{f.installed_version ?? (f.environment_status && !['AVAILABLE', 'AMBIGUOUS'].includes(f.environment_status) ? <span title="no usable environment">unknown · env {f.environment_status.toLowerCase()}</span> : 'not installed')}</td>
                   <td className="px-2 py-2">
                     <button type="button" onClick={() => toggle(i)} className="text-left font-mono text-xs font-medium text-fg hover:text-accent">{f.planned_api}</button>
                     {f.arguments?.length > 0 && <div className="font-mono text-[11px] text-fg-subtle">({f.arguments.join(', ')})</div>}
                   </td>
-                  <td className="px-2 py-2"><Badge>{f.status}</Badge></td>
+                  <td className="px-2 py-2"><Badge>{f.status}</Badge>{f.verdict && f.verdict !== f.status && <div className="mt-0.5 text-[11px] text-fg-subtle" title="existence in the installed package">exists: {f.verdict === 'VERIFIED' ? 'yes' : f.verdict.toLowerCase()}</div>}</td>
                   <td className="max-w-[22rem] px-2 py-2 text-xs text-fg-muted"><span className="line-clamp-2">{f.explanation}</span></td>
                   <td className="max-w-[18rem] px-2 py-2 text-xs text-fg"><span className="line-clamp-2">{f.suggested_correction || '—'}</span></td>
                 </tr>
