@@ -85,7 +85,8 @@ plus Tavily; **the Anthropic provider has never been live-tested** (no key).
 | OpenAI-compatible provider: text, structured output, streaming usage, truncation detection + bounded retry, error handling, rate-limit waits | LOCAL · CI · LIVE (Groq) |
 | Anthropic provider | LOCAL · CI with fake transports only — **MOCK; never live-tested** |
 | Coding agent on new, non-bundled tasks | LIVE: Python (pydantic v2) passed; TypeScript (zod) passed first try (3,026 tokens); chained-call TypeScript task passed first try (2,811 tokens); Demo C passed |
-| Actual-token benchmark | LIVE for 3 tasks; savings computable for 2 (see [Measured results](#measured-results-honest)) |
+| Actual-token benchmark (v2: 12 tasks, 3 configurations) | LIVE for 6 of 12 tasks (45 runs, 2026-11-13); 6 tasks + the `context_only` ablation BLOCKED by the Groq daily quota (see [Measured results](#measured-results-honest)) |
+| Adaptive execution (risk gate + post-generation API audit) | LOCAL · CI · LIVE (fast path on 3 tasks, full path on 2) |
 | Docker sandbox (`--network none`, read-only rootfs, uid 65534, cap-drop ALL, limits, timeout kill) | CI (16 Docker tests on GitHub runners). Locally skipped here (no Docker daemon in this build environment) |
 | Self-contained sandbox image (no host `/usr` mount) | CI: image builds on GitHub Actions and the 16 sandbox tests pass inside it (job `sandbox-image`). Not built in the author's workspace (no registry access); not published to a registry |
 | Local auth (one-time token → HttpOnly session + CSRF, Host allowlist, loopback-only by default) | LOCAL · CI |
@@ -127,7 +128,29 @@ real Groq and Tavily from GitHub Actions. Open items:
 
 ## Measured results (honest)
 
-**Actual provider usage, current code** (Groq `openai/gpt-oss-120b`, 3 runs per mode, same model, repository snapshot,
+### Version 2 benchmark (2026-11-13, adaptive execution)
+ACTUAL_PROVIDER_USAGE, Groq `openai/gpt-oss-120b`, 3 repetitions per configuration where completed. Mean tokens per
+run; paired savings over repetitions where both runs succeeded. Full report:
+[docs/submission/benchmark-results/2026-11-13](docs/submission/benchmark-results/2026-11-13/README.md).
+
+| Task | Baseline | VeriCode full (original) | VeriCode adaptive | Adaptive saving vs baseline |
+|---|---|---|---|---|
+| summary (small Py, no API) | 4,959 | 2,428 | **1,250** (fast path) | **74.8%** (n=3) |
+| inv_refactor (medium Py, refactor) | 4,152 | 3,113 | **2,458** (fast path) | **40.8%** (n=3) |
+| ord_bugfix (medium TS, seeded bug) | 3,418 | 3,257 | 3,337 incl. 1 failed run (fast path) | 45.6% (n=2; 1 of 3 runs failed) |
+| users (small Py, pydantic) | 6,840 | 3,103 | 1,911 (full path) | 72.1% (n=1) |
+| inv_restock (medium Py, pydantic) | 9,291 | 7,364 incl. 1 failed run | pending (re-run blocked by quota) | — |
+| signup (small TS, zod) | **808** | 2,475 | 2,238 (full path) | **−177.1%** (n=3): VeriCode costs more |
+
+Overall, token-weighted over all successful pairs: adaptive **46.0%** (12 pairs, 5 tasks), original full
+pipeline **28.7%** (15 pairs, 6 tasks). Skipping the planner on fast-path tasks removed 684–1,326 tokens per run.
+Six tasks (including all three large-repository tasks) and the `context_only` ablation were not run: the Groq
+account hit its daily token cap after ~211k tokens. **Exploratory (n ≤ 3), one model, small and medium
+repositories only: not a general savings claim.**
+
+### Version 1 benchmark (historical, original two-mode benchmark)
+
+**Actual provider usage, current code at the time** (Groq `openai/gpt-oss-120b`, 3 runs per mode, same model, repository snapshot,
 repair budget (3) and acceptance tests). Mean ± stdev total tokens per run:
 
 | Task | Success B / V | First pass B / V | Repairs B / V (mean) | Baseline tokens | VeriCode tokens | Savings |
@@ -187,8 +210,9 @@ A configured real provider that fails returns an error. It never falls back to m
 
 - Live runs so far: Groq (`openai/gpt-oss-120b`) + Tavily in GitHub Actions only; Anthropic never live-tested.
   Groq free-tier rate limits (HTTP 429) cut the last validation run short.
-- Actual-token savings are measured on three small demo tasks, computable for two (79.6%, 49.6%). On the smallest task
-  VeriCode costs about 2.3x the baseline. There is no general savings claim.
+- Actual-token savings (v2) are measured on 6 of 12 tasks with n ≤ 3; the large-repository tasks and the ablation are
+  pending (Groq daily quota). On the smallest task VeriCode costs about 2.8x the baseline. No general savings claim.
+- One fast-path run of 9 failed (ord_bugfix) vs none on the full path; too few runs to tell a regression from noise.
 - Low-authority sources may still *support* a claim (noted in the explanation, low confidence); they can no longer
   contradict one.
 - Groq free-tier limits (8,000 tokens/min plus a longer cap) make full benchmarks slow or blocked; the client waits
@@ -207,7 +231,7 @@ A configured real provider that fails returns an error. It never falls back to m
 ## Future work
 - Benchmark larger, more diverse repositories, where avoided repairs should matter more.
 - More package ecosystems (Go, Rust, Java), stronger semantic claim verification, more evidence providers.
-- Skip the planner for tasks that touch no third-party API (the main overhead on tiny tasks).
+- Finish the v2 benchmark (resume instructions in the dated report), then 5+ repetitions per task.
 - Live-test the Anthropic provider and one more OpenAI-compatible model.
 - Publish the self-contained sandbox image to a registry (CI already builds and tests it).
 

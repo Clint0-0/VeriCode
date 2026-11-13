@@ -24,7 +24,24 @@ OpenAI-compatible API + Tavily, run in GitHub Actions), **MOCK**, **BLOCKED**. F
 | Browser, mock provider (flows, 8 screens, mobile, empty/error states, mock labelling) | 9/9 | CI |
 | Anthropic provider | never run live (no key) | MOCK |
 
-## Actual-token benchmark (3 runs per mode, same model, snapshot, repair budget 3, acceptance tests)
+## Actual-token benchmark, version 2 (2026-11-13)
+
+12 tasks (small/medium/large, Python/TypeScript, feature/modification/bug fix/refactor/test writing, 6 with
+dependency-API risk), configurations `baseline`, `vericode_full` (original) and `vericode_adaptive` (risk gate +
+post-generation API audit), 3 paired repetitions. ACTUAL_PROVIDER_USAGE, Groq `openai/gpt-oss-120b`.
+
+* Completed on 6 tasks (45 runs, 43 succeeded). Token-weighted savings over successful pairs: adaptive **46.0%**
+  (12 pairs, 5 tasks), original full pipeline **28.7%** (15 pairs, 6 tasks).
+* Fast path (planner skipped) on summary, inv_refactor, ord_bugfix: 74.8%, 40.8%, 45.6% vs baseline; 21–49% fewer
+  tokens than the original full pipeline. One of 9 fast-path runs failed (none on the full path).
+* Negative result kept: signup (808-token baseline) costs VeriCode 2.8× (adaptive) / 3.1× (full).
+* Not run (Groq daily token cap): 6 tasks including all large-repository tasks, and the `context_only` ablation.
+* Two defects found by the live runs and fixed (audit false positive on pydantic model fields; a missed 413 retry);
+  affected runs discarded, not reported.
+
+Details, stage breakdown, ablation, limitations, run links: [benchmark-results/2026-11-13](benchmark-results/2026-11-13/README.md).
+
+## Actual-token benchmark, version 1 (historical: 3 runs per mode, same model, snapshot, repair budget 3, acceptance tests)
 
 | Task | Success B / V | First pass B / V | Repairs B / V | Baseline tokens (mean ± sd) | VeriCode tokens (mean ± sd) | Savings |
 |---|---|---|---|---|---|---|
@@ -46,7 +63,10 @@ tokens, and that overhead roughly doubles the cost. Three small demo tasks are *
 
 ## Limitations
 - Anthropic adapter: implemented and contract-tested with fake transports, never live.
-- Benchmark: three small tasks, n=3, one task blocked; no large-repository benchmark.
+- Benchmark v2: 6 of 12 tasks measured, n ≤ 3, one model; no large-repository task measured yet (baseline whole-repo
+  prompt hits Groq's 8,000-token per-request cap; the rest blocked by the daily quota); ablation `context_only` not run.
+- The new benchmark repositories are original code; pinned open-source snapshots could not be used (running
+  downloaded code was not permitted in the build environment).
 - Groq free tier (8,000 tokens/min plus a longer cap) makes live runs slow; the client waits out resets up to the
   configured limit and stops on longer ones (BLOCKED, never faked).
 - Pre-flight false alarms are possible on unusual planner output. Several were found live and fixed with

@@ -81,7 +81,10 @@ def redact(text: str) -> str:
             text = text.replace(key, "[REDACTED]")
     for pat in _SECRET_PATTERNS:
         text = pat.sub("[REDACTED]", text)
-    return text
+    return _ACCOUNT_ID.sub("org_[redacted]", text)  # provider account ids in error bodies (not secret, but identifying)
+
+
+_ACCOUNT_ID = re.compile(r"\borg_[A-Za-z0-9]{16,}\b")
 
 
 SENSITIVE_FILE_RE = re.compile(r"(^|/)(\.env(\..*)?|.*\.pem|.*\.key|id_rsa.*|credentials.*|secrets?\..*)$", re.I)

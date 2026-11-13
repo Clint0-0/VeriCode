@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.0 — adaptive execution and benchmark v2 (branch `feat/vericode-benchmark-evidence`)
+- **Adaptive execution** (`vericode` mode default): a conservative risk gate skips the planner only with positive
+  evidence of no third-party API involvement; a post-generation API audit (Python AST + installed source;
+  TypeScript compiler over the real files) checks the code actually written, with no LLM call, and its findings are
+  repaired. `vericode_full` keeps the original pipeline; `context_only` is an ablation.
+- **Benchmark v2**: 12 tasks in 5 repositories (small/medium/large, Python/TypeScript, feature, modification,
+  seeded bug fix, refactor, mutation-checked test writing), reference solutions proving each task is unsolved at
+  its start and solvable; paired interleaved runs, resumable JSONL records, token/run budgets,
+  SUCCESS/FAILED/BLOCKED, paired savings only for both-successful same-label pairs, median/stdev, 95% CI from n ≥ 5,
+  per-stage tokens, code version per record. `vericode.bench_cli` (plan / run / report) and a manual workflow.
+- **LIVE** (2026-11-13, Groq `openai/gpt-oss-120b`): 6 of 12 tasks; adaptive 46.0% and original 28.7%
+  token-weighted savings over successful pairs (exploratory); signup remains negative. Rest BLOCKED by quota.
+- Fixes from the live runs: audit false positive on pydantic model fields; HTTP 413 limits parsed beyond the error
+  cut (fit-and-retry); request-size blocks no longer stop a batch; resumed records de-duplicated; timed-out Docker
+  containers waited on until removed (flaky CI check).
+- Dashboard: benchmark analytics (configurations, stages, input/output, success vs tokens, size/language,
+  fast vs full) with MOCK/ESTIMATED warnings; `GET /api/benchmarks/published`.
+
 ## 2.3.5 — API edge-case fixes (found by input probing)
 - `POST /api/verify-api` with an empty or invalid identifier returned HTTP 500; it now returns 422 with the reason.
 - A preflight that failed (provider error, mock without a script) left its task `queued` forever, so the UI showed it

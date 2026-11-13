@@ -1,0 +1,5386 @@
+{
+  "id": null,
+  "created_at": 1794555433.1568832,
+  "provider": "openai",
+  "coder_model": "openai/gpt-oss-120b",
+  "planner_model": "openai/gpt-oss-120b",
+  "runs_per_mode": 3,
+  "repair_budget": 3,
+  "measurement_labels": [
+    "ACTUAL_PROVIDER_USAGE"
+  ],
+  "stopped": null,
+  "tokens_spent_actual": null,
+  "code_versions": [
+    "ba29295152da",
+    "fde7661"
+  ],
+  "source_runs": [
+    43383744860,
+    43386909599
+  ],
+  "summary": {
+    "tasks": [
+      {
+        "task": "summary",
+        "title": "Demo 3 - priority_summary() on TaskStore (no API risk)",
+        "language": "python",
+        "repo_size": "small",
+        "category": "feature",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 0.333,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 4958.7,
+              "median": 5996,
+              "stdev": 1857.7,
+              "min": 2814,
+              "max": 6066,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 4958.7,
+              "median": 5996,
+              "stdev": 1857.7,
+              "min": 2814,
+              "max": 6066,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 4375,
+              "median": 5309,
+              "stdev": 1617.7,
+              "min": 2507,
+              "max": 5309,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 583.7,
+              "median": 687,
+              "stdev": 242.1,
+              "min": 307,
+              "max": 757,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 2821.3,
+              "median": 2819,
+              "stdev": 8.7,
+              "min": 2814,
+              "max": 2831,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 2137.3,
+              "median": 3177,
+              "stdev": 1851.2,
+              "min": 0,
+              "max": 3235,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1.7,
+              "median": 2,
+              "stdev": 0.6,
+              "min": 1,
+              "max": 2,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0.7,
+              "median": 1,
+              "stdev": 0.6,
+              "min": 0,
+              "max": 1,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 22.4,
+              "median": 21.2,
+              "stdev": 19.1,
+              "min": 3.94,
+              "max": 42.1,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_023050901cda",
+              "task_9436804f4ed5",
+              "task_c3530a1e6f26"
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 2428,
+              "median": 2263,
+              "stdev": 499.4,
+              "min": 2032,
+              "max": 2989,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 2428,
+              "median": 2263,
+              "stdev": 499.4,
+              "min": 2032,
+              "max": 2989,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 1674.3,
+              "median": 1492,
+              "stdev": 315.8,
+              "min": 1492,
+              "max": 2039,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 753.7,
+              "median": 771,
+              "stdev": 205.5,
+              "min": 540,
+              "max": 950,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 1092,
+              "median": 783,
+              "stdev": 567.5,
+              "min": 746,
+              "max": 1747,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 1336,
+              "median": 1249,
+              "stdev": 156.8,
+              "min": 1242,
+              "max": 1517,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2.3,
+              "median": 2,
+              "stdev": 0.6,
+              "min": 2,
+              "max": 3,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 13.9,
+              "median": 15.3,
+              "stdev": 10.6,
+              "min": 2.62,
+              "max": 23.67,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_b11d230a336c",
+              "task_220f08f6040a",
+              "task_a7c7dd1e7b63"
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 1249.7,
+              "median": 1273,
+              "stdev": 43.0,
+              "min": 1200,
+              "max": 1276,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 1249.7,
+              "median": 1273,
+              "stdev": 43.0,
+              "min": 1200,
+              "max": 1276,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 909,
+              "median": 909,
+              "stdev": 0.0,
+              "min": 909,
+              "max": 909,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 340.7,
+              "median": 364,
+              "stdev": 43.0,
+              "min": 291,
+              "max": 367,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 1249.7,
+              "median": 1273,
+              "stdev": 43.0,
+              "min": 1200,
+              "max": 1276,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 9.9,
+              "median": 10.0,
+              "stdev": 1.7,
+              "min": 8.12,
+              "max": 11.42,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "fast": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_20d133d264a1",
+              "task_8abf43771dab",
+              "task_26cf1a7a04ef"
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 6066,
+                "configuration": 2263,
+                "savings_pct": 62.7,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 5996,
+                "configuration": 2032,
+                "savings_pct": 66.1,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 2814,
+                "configuration": 2989,
+                "savings_pct": -6.2,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": 40.9,
+              "median": 62.7,
+              "stdev": 40.8,
+              "min": -6.2,
+              "max": 66.1,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": 51.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 6066,
+                "configuration": 1273,
+                "savings_pct": 79.0,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 5996,
+                "configuration": 1200,
+                "savings_pct": 80.0,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 2814,
+                "configuration": 1276,
+                "savings_pct": 54.7,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": 71.2,
+              "median": 79.0,
+              "stdev": 14.3,
+              "min": 54.7,
+              "max": 80.0,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": 74.8,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          }
+        }
+      },
+      {
+        "task": "signup",
+        "title": "Demo 1b - TypeScript zod signup schema (deprecated + mistyped call planned)",
+        "language": "typescript",
+        "repo_size": "small",
+        "category": "feature",
+        "api_risk": "dependency_api",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 807.7,
+              "median": 828,
+              "stdev": 47.9,
+              "min": 753,
+              "max": 842,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 807.7,
+              "median": 828,
+              "stdev": 47.9,
+              "min": 753,
+              "max": 842,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 560,
+              "median": 560,
+              "stdev": 0.0,
+              "min": 560,
+              "max": 560,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 247.7,
+              "median": 268,
+              "stdev": 47.9,
+              "min": 193,
+              "max": 282,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 807.7,
+              "median": 828,
+              "stdev": 47.9,
+              "min": 753,
+              "max": 842,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 5.1,
+              "median": 4.0,
+              "stdev": 2.2,
+              "min": 3.73,
+              "max": 7.59,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_fd40ebec821d",
+              "task_d0f0e2173093",
+              "task_1ed256c4878e"
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 2475.3,
+              "median": 2173,
+              "stdev": 742.2,
+              "min": 1932,
+              "max": 3321,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 2475.3,
+              "median": 2173,
+              "stdev": 742.2,
+              "min": 1932,
+              "max": 3321,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 1505.7,
+              "median": 1328,
+              "stdev": 313.8,
+              "min": 1321,
+              "max": 1868,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 969.7,
+              "median": 845,
+              "stdev": 434.6,
+              "min": 611,
+              "max": 1453,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 1529.3,
+              "median": 1232,
+              "stdev": 713.1,
+              "min": 1013,
+              "max": 2343,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 946,
+              "median": 941,
+              "stdev": 29.8,
+              "min": 919,
+              "max": 978,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2.3,
+              "median": 2,
+              "stdev": 0.6,
+              "min": 2,
+              "max": 3,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 18.3,
+              "median": 18.6,
+              "stdev": 1.2,
+              "min": 16.97,
+              "max": 19.37,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_974778030c25",
+              "task_84fc00d31dd9",
+              "task_cb820fa83d7c"
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 2238.3,
+              "median": 2251,
+              "stdev": 54.1,
+              "min": 2179,
+              "max": 2285,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 2238.3,
+              "median": 2251,
+              "stdev": 54.1,
+              "min": 2179,
+              "max": 2285,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 1264.3,
+              "median": 1264,
+              "stdev": 0.6,
+              "min": 1264,
+              "max": 1265,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 974,
+              "median": 987,
+              "stdev": 53.7,
+              "min": 915,
+              "max": 1020,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 1337.3,
+              "median": 1288,
+              "stdev": 88.9,
+              "min": 1284,
+              "max": 1440,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 901,
+              "median": 891,
+              "stdev": 61.6,
+              "min": 845,
+              "max": 967,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 17.4,
+              "median": 16.6,
+              "stdev": 2.8,
+              "min": 15.15,
+              "max": 20.5,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_250b0eb75e55",
+              "task_1a4a0c9e22a6",
+              "task_fef540ac08bb"
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 828,
+                "configuration": 1932,
+                "savings_pct": -133.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 753,
+                "configuration": 3321,
+                "savings_pct": -341.0,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 842,
+                "configuration": 2173,
+                "savings_pct": -158.1,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": -210.8,
+              "median": -158.1,
+              "stdev": 113.4,
+              "min": -341.0,
+              "max": -133.3,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": -206.5,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 828,
+                "configuration": 2251,
+                "savings_pct": -171.9,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 753,
+                "configuration": 2179,
+                "savings_pct": -189.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 842,
+                "configuration": 2285,
+                "savings_pct": -171.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": -177.6,
+              "median": -171.9,
+              "stdev": 10.3,
+              "min": -189.4,
+              "max": -171.4,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": -177.1,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          }
+        }
+      },
+      {
+        "task": "ord_bugfix",
+        "title": "Free-shipping threshold and per-kilo rounding bug (medium TS repo, seeded)",
+        "language": "typescript",
+        "repo_size": "medium",
+        "category": "bugfix",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 3417.7,
+              "median": 3369,
+              "stdev": 86.0,
+              "min": 3367,
+              "max": 3517,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 3417.7,
+              "median": 3369,
+              "stdev": 86.0,
+              "min": 3367,
+              "max": 3517,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 2806,
+              "median": 2806,
+              "stdev": 0.0,
+              "min": 2806,
+              "max": 2806,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 611.7,
+              "median": 563,
+              "stdev": 86.0,
+              "min": 561,
+              "max": 711,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 3417.7,
+              "median": 3369,
+              "stdev": 86.0,
+              "min": 3367,
+              "max": 3517,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 21.1,
+              "median": 21.4,
+              "stdev": 2.7,
+              "min": 18.34,
+              "max": 23.62,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_b1f207c24e73",
+              "task_704fe5cf54d4",
+              "task_c1c8ebb30198"
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 3256.7,
+              "median": 3287,
+              "stdev": 89.4,
+              "min": 3156,
+              "max": 3327,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 3256.7,
+              "median": 3287,
+              "stdev": 89.4,
+              "min": 3156,
+              "max": 3327,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 2041,
+              "median": 2042,
+              "stdev": 5.6,
+              "min": 2035,
+              "max": 2046,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 1215.7,
+              "median": 1245,
+              "stdev": 94.5,
+              "min": 1110,
+              "max": 1292,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 1325.7,
+              "median": 1403,
+              "stdev": 139.2,
+              "min": 1165,
+              "max": 1409,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 1931,
+              "median": 1918,
+              "stdev": 54.7,
+              "min": 1884,
+              "max": 1991,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 22.8,
+              "median": 22.4,
+              "stdev": 2.3,
+              "min": 20.67,
+              "max": 25.3,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_6b5e16941071",
+              "task_c8bcf567c8a8",
+              "task_f1bbcaac2748"
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 0.667,
+            "first_pass_rate": 0.667,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 3336.7,
+              "median": 1887,
+              "stdev": 2536.1,
+              "min": 1858,
+              "max": 6265,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 1872.5,
+              "median": 1872.5,
+              "stdev": 20.5,
+              "min": 1858,
+              "max": 1887,
+              "n": 2
+            },
+            "input_tokens": {
+              "mean": 1629,
+              "median": 1327,
+              "stdev": 523.1,
+              "min": 1327,
+              "max": 2233,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 1707.7,
+              "median": 560,
+              "stdev": 2013.0,
+              "min": 531,
+              "max": 4032,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 1880,
+              "median": 1887,
+              "stdev": 19.5,
+              "min": 1858,
+              "max": 1895,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 1456.7,
+              "median": 0,
+              "stdev": 2523.0,
+              "min": 0,
+              "max": 4370,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 1,
+              "stdev": 1.7,
+              "min": 1,
+              "max": 4,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 1,
+              "median": 0,
+              "stdev": 1.7,
+              "min": 0,
+              "max": 3,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 28.4,
+              "median": 16.0,
+              "stdev": 21.8,
+              "min": 15.63,
+              "max": 53.64,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 0.9,
+              "median": 1.0,
+              "stdev": 0.2,
+              "min": 0.636,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "fast": 3
+            },
+            "failures": [
+              {
+                "rep": 3,
+                "status": "FAILED",
+                "error": "checks still failing after 3 repair attempt(s)"
+              }
+            ],
+            "task_ids": [
+              "task_93d84746dd14",
+              "task_28939d1508b7",
+              "task_2f4f86c81800"
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 3369,
+                "configuration": 3287,
+                "savings_pct": 2.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 3517,
+                "configuration": 3327,
+                "savings_pct": 5.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 3367,
+                "configuration": 3156,
+                "savings_pct": 6.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": 4.7,
+              "median": 5.4,
+              "stdev": 2.0,
+              "min": 2.4,
+              "max": 6.3,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": 4.7,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 3369,
+                "configuration": 1858,
+                "savings_pct": 44.9,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 3517,
+                "configuration": 1887,
+                "savings_pct": 46.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [
+              {
+                "rep": 3,
+                "reason": "baseline SUCCESS, vericode_adaptive FAILED"
+              }
+            ],
+            "paired_savings": {
+              "mean": 45.6,
+              "median": 45.6,
+              "stdev": 1.0,
+              "min": 44.9,
+              "max": 46.3,
+              "n": 2,
+              "ci95": null,
+              "evidence": "anecdotal"
+            },
+            "mean_token_savings_pct": 45.6,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          }
+        }
+      },
+      {
+        "task": "inv_restock",
+        "title": "RestockRequest model + service method (medium Python repo, pydantic 2)",
+        "language": "python",
+        "repo_size": "medium",
+        "category": "feature",
+        "api_risk": "dependency_api",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 0.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 9290.7,
+              "median": 9460,
+              "stdev": 310.8,
+              "min": 8932,
+              "max": 9480,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 9290.7,
+              "median": 9460,
+              "stdev": 310.8,
+              "min": 8932,
+              "max": 9480,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 6793.7,
+              "median": 6795,
+              "stdev": 21.0,
+              "min": 6772,
+              "max": 6814,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 2497,
+              "median": 2646,
+              "stdev": 292.5,
+              "min": 2160,
+              "max": 2685,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 4854.3,
+              "median": 4840,
+              "stdev": 106.2,
+              "min": 4756,
+              "max": 4967,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 4436.3,
+              "median": 4493,
+              "stdev": 237.1,
+              "min": 4176,
+              "max": 4640,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 74.7,
+              "median": 71.8,
+              "stdev": 12.2,
+              "min": 64.12,
+              "max": 88.04,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_58cc4e5df0ff",
+              "task_ecd96781846a",
+              "task_a49c9b0c56b1"
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 0.667,
+            "first_pass_rate": 0.667,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 7363.7,
+              "median": 5088,
+              "stdev": 4118.6,
+              "min": 4885,
+              "max": 12118,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 4986.5,
+              "median": 4986.5,
+              "stdev": 143.5,
+              "min": 4885,
+              "max": 5088,
+              "n": 2
+            },
+            "input_tokens": {
+              "mean": 4400.7,
+              "median": 2970,
+              "stdev": 2484.9,
+              "min": 2962,
+              "max": 7270,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 2963,
+              "median": 2118,
+              "stdev": 1635.4,
+              "min": 1923,
+              "max": 4848,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 1529,
+              "median": 1458,
+              "stdev": 202.1,
+              "min": 1372,
+              "max": 1757,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 3368.3,
+              "median": 3513,
+              "stdev": 356.7,
+              "min": 2962,
+              "max": 3630,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 2466.3,
+              "median": 0,
+              "stdev": 4271.8,
+              "min": 0,
+              "max": 7399,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 3,
+              "median": 2,
+              "stdev": 1.7,
+              "min": 2,
+              "max": 5,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 1,
+              "median": 0,
+              "stdev": 1.7,
+              "min": 0,
+              "max": 3,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 48.2,
+              "median": 34.7,
+              "stdev": 24.6,
+              "min": 33.36,
+              "max": 76.61,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 2
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [
+              {
+                "rep": 2,
+                "status": "FAILED",
+                "error": "checks still failing after 3 repair attempt(s)"
+              }
+            ],
+            "task_ids": [
+              "task_095215f8a41c",
+              "task_0ba4356f7e22",
+              "task_669955e2b98b"
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 9480,
+                "configuration": 5088,
+                "savings_pct": 46.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 9460,
+                "configuration": 4885,
+                "savings_pct": 48.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [
+              {
+                "rep": 2,
+                "reason": "baseline SUCCESS, vericode_full FAILED"
+              }
+            ],
+            "paired_savings": {
+              "mean": 47.3,
+              "median": 47.3,
+              "stdev": 1.5,
+              "min": 46.3,
+              "max": 48.4,
+              "n": 2,
+              "ci95": null,
+              "evidence": "anecdotal"
+            },
+            "mean_token_savings_pct": 47.3,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline SUCCESS, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline SUCCESS, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline SUCCESS, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "inv_refactor",
+        "title": "Extract duplicated discount + VAT logic (medium Python repo)",
+        "language": "python",
+        "repo_size": "medium",
+        "category": "refactor",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 4151.7,
+              "median": 4066,
+              "stdev": 197.9,
+              "min": 4011,
+              "max": 4378,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 4151.7,
+              "median": 4066,
+              "stdev": 197.9,
+              "min": 4011,
+              "max": 4378,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 3179,
+              "median": 3179,
+              "stdev": 0.0,
+              "min": 3179,
+              "max": 3179,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 972.7,
+              "median": 887,
+              "stdev": 197.9,
+              "min": 832,
+              "max": 1199,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 4151.7,
+              "median": 4066,
+              "stdev": 197.9,
+              "min": 4011,
+              "max": 4378,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 32.3,
+              "median": 30.1,
+              "stdev": 4.0,
+              "min": 29.77,
+              "max": 36.91,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_5933e32d0786",
+              "task_3116d4e13eb1",
+              "task_be678d8be2a2"
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 3112.7,
+              "median": 3201,
+              "stdev": 372.4,
+              "min": 2704,
+              "max": 3433,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 3112.7,
+              "median": 3201,
+              "stdev": 372.4,
+              "min": 2704,
+              "max": 3433,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 1474,
+              "median": 1474,
+              "stdev": 0.0,
+              "min": 1474,
+              "max": 1474,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 1638.7,
+              "median": 1727,
+              "stdev": 372.4,
+              "min": 1230,
+              "max": 1959,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 684.3,
+              "median": 680,
+              "stdev": 15.9,
+              "min": 671,
+              "max": 702,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 2428.3,
+              "median": 2521,
+              "stdev": 358.1,
+              "min": 2033,
+              "max": 2731,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 17.5,
+              "median": 17.7,
+              "stdev": 2.2,
+              "min": 15.2,
+              "max": 19.67,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_e095fb3a0ef4",
+              "task_aff5e99eed85",
+              "task_790f705c8a93"
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 3,
+            "blocked": 0,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 2458,
+              "median": 2657,
+              "stdev": 513.3,
+              "min": 1875,
+              "max": 2842,
+              "n": 3
+            },
+            "total_tokens_successful": {
+              "mean": 2458,
+              "median": 2657,
+              "stdev": 513.3,
+              "min": 1875,
+              "max": 2842,
+              "n": 3
+            },
+            "input_tokens": {
+              "mean": 868,
+              "median": 868,
+              "stdev": 0.0,
+              "min": 868,
+              "max": 868,
+              "n": 3
+            },
+            "output_tokens": {
+              "mean": 1590,
+              "median": 1789,
+              "stdev": 513.3,
+              "min": 1007,
+              "max": 1974,
+              "n": 3
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "coder_tokens": {
+              "mean": 2458,
+              "median": 2657,
+              "stdev": 513.3,
+              "min": 1875,
+              "max": 2842,
+              "n": 3
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "llm_calls": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 3
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "duration_s": {
+              "mean": 19.3,
+              "median": 19.4,
+              "stdev": 5.2,
+              "min": 14.06,
+              "max": 24.45,
+              "n": 3
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 3
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 3
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "fast": 3
+            },
+            "failures": [],
+            "task_ids": [
+              "task_9abe98627405",
+              "task_f3e666711ec6",
+              "task_13c74e3752bc"
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 4066,
+                "configuration": 3201,
+                "savings_pct": 21.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 4011,
+                "configuration": 3433,
+                "savings_pct": 14.4,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 4378,
+                "configuration": 2704,
+                "savings_pct": 38.2,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": 24.6,
+              "median": 21.3,
+              "stdev": 12.2,
+              "min": 14.4,
+              "max": 38.2,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": 25.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 4066,
+                "configuration": 2842,
+                "savings_pct": 30.1,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 2,
+                "baseline": 4011,
+                "configuration": 1875,
+                "savings_pct": 53.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              },
+              {
+                "rep": 3,
+                "baseline": 4378,
+                "configuration": 2657,
+                "savings_pct": 39.3,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [],
+            "paired_savings": {
+              "mean": 40.9,
+              "median": 39.3,
+              "stdev": 11.7,
+              "min": 30.1,
+              "max": 53.3,
+              "n": 3,
+              "ci95": null,
+              "evidence": "exploratory"
+            },
+            "mean_token_savings_pct": 40.8,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          }
+        }
+      },
+      {
+        "task": "users",
+        "title": "Demo 1 - Pydantic User model (incompatible v1 API planned)",
+        "language": "python",
+        "repo_size": "small",
+        "category": "feature",
+        "api_risk": "dependency_api",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 1,
+            "blocked": 2,
+            "success_rate": 1.0,
+            "first_pass_rate": 0.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 6840,
+              "median": 6840,
+              "stdev": 0.0,
+              "min": 6840,
+              "max": 6840,
+              "n": 1
+            },
+            "total_tokens_successful": {
+              "mean": 6840,
+              "median": 6840,
+              "stdev": 0.0,
+              "min": 6840,
+              "max": 6840,
+              "n": 1
+            },
+            "input_tokens": {
+              "mean": 5733,
+              "median": 5733,
+              "stdev": 0.0,
+              "min": 5733,
+              "max": 5733,
+              "n": 1
+            },
+            "output_tokens": {
+              "mean": 1107,
+              "median": 1107,
+              "stdev": 0.0,
+              "min": 1107,
+              "max": 1107,
+              "n": 1
+            },
+            "planner_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "coder_tokens": {
+              "mean": 3029,
+              "median": 3029,
+              "stdev": 0.0,
+              "min": 3029,
+              "max": 3029,
+              "n": 1
+            },
+            "repair_tokens": {
+              "mean": 3811,
+              "median": 3811,
+              "stdev": 0.0,
+              "min": 3811,
+              "max": 3811,
+              "n": 1
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 1
+            },
+            "repair_attempts": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 1
+            },
+            "duration_s": {
+              "mean": 4.7,
+              "median": 4.7,
+              "stdev": 0.0,
+              "min": 4.71,
+              "max": 4.71,
+              "n": 1
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 1
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "baseline": 1
+            },
+            "failures": [
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              "task_10a4181b30f2",
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 1,
+            "blocked": 2,
+            "success_rate": 1.0,
+            "first_pass_rate": 0.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 3103,
+              "median": 3103,
+              "stdev": 0.0,
+              "min": 3103,
+              "max": 3103,
+              "n": 1
+            },
+            "total_tokens_successful": {
+              "mean": 3103,
+              "median": 3103,
+              "stdev": 0.0,
+              "min": 3103,
+              "max": 3103,
+              "n": 1
+            },
+            "input_tokens": {
+              "mean": 1949,
+              "median": 1949,
+              "stdev": 0.0,
+              "min": 1949,
+              "max": 1949,
+              "n": 1
+            },
+            "output_tokens": {
+              "mean": 1154,
+              "median": 1154,
+              "stdev": 0.0,
+              "min": 1154,
+              "max": 1154,
+              "n": 1
+            },
+            "planner_tokens": {
+              "mean": 931,
+              "median": 931,
+              "stdev": 0.0,
+              "min": 931,
+              "max": 931,
+              "n": 1
+            },
+            "coder_tokens": {
+              "mean": 979,
+              "median": 979,
+              "stdev": 0.0,
+              "min": 979,
+              "max": 979,
+              "n": 1
+            },
+            "repair_tokens": {
+              "mean": 1193,
+              "median": 1193,
+              "stdev": 0.0,
+              "min": 1193,
+              "max": 1193,
+              "n": 1
+            },
+            "llm_calls": {
+              "mean": 3,
+              "median": 3,
+              "stdev": 0.0,
+              "min": 3,
+              "max": 3,
+              "n": 1
+            },
+            "repair_attempts": {
+              "mean": 1,
+              "median": 1,
+              "stdev": 0.0,
+              "min": 1,
+              "max": 1,
+              "n": 1
+            },
+            "duration_s": {
+              "mean": 12.0,
+              "median": 12.0,
+              "stdev": 0.0,
+              "min": 12.0,
+              "max": 12.0,
+              "n": 1
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 1
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 1
+            },
+            "failures": [
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-remaining-requests': '906', 'x-ratelimit-reset-requests': '2h15m21.6s', 'x-ratelimit-limit-tokens': '8000', 'x-ratelimit-remaining-tokens': '325', 'x-ratelimit-reset-tokens': '57.562s', 'retry-after': '382'}. Account quota or per-minute limit reached; wait and re-run."
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              "task_b0e8b7648868",
+              "task_23b3df5c113e",
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 1,
+            "blocked": 2,
+            "success_rate": 1.0,
+            "first_pass_rate": 1.0,
+            "measurement": "ACTUAL_PROVIDER_USAGE",
+            "total_tokens": {
+              "mean": 1911,
+              "median": 1911,
+              "stdev": 0.0,
+              "min": 1911,
+              "max": 1911,
+              "n": 1
+            },
+            "total_tokens_successful": {
+              "mean": 1911,
+              "median": 1911,
+              "stdev": 0.0,
+              "min": 1911,
+              "max": 1911,
+              "n": 1
+            },
+            "input_tokens": {
+              "mean": 1054,
+              "median": 1054,
+              "stdev": 0.0,
+              "min": 1054,
+              "max": 1054,
+              "n": 1
+            },
+            "output_tokens": {
+              "mean": 857,
+              "median": 857,
+              "stdev": 0.0,
+              "min": 857,
+              "max": 857,
+              "n": 1
+            },
+            "planner_tokens": {
+              "mean": 950,
+              "median": 950,
+              "stdev": 0.0,
+              "min": 950,
+              "max": 950,
+              "n": 1
+            },
+            "coder_tokens": {
+              "mean": 961,
+              "median": 961,
+              "stdev": 0.0,
+              "min": 961,
+              "max": 961,
+              "n": 1
+            },
+            "repair_tokens": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "llm_calls": {
+              "mean": 2,
+              "median": 2,
+              "stdev": 0.0,
+              "min": 2,
+              "max": 2,
+              "n": 1
+            },
+            "repair_attempts": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "duration_s": {
+              "mean": 12.8,
+              "median": 12.8,
+              "stdev": 0.0,
+              "min": 12.81,
+              "max": 12.81,
+              "n": 1
+            },
+            "test_pass_rate": {
+              "mean": 1.0,
+              "median": 1.0,
+              "stdev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 1
+            },
+            "api_problems_shipped": {
+              "mean": 0,
+              "median": 0,
+              "stdev": 0.0,
+              "min": 0,
+              "max": 0,
+              "n": 1
+            },
+            "api_problems_detail": [],
+            "execution_paths": {
+              "full": 1
+            },
+            "failures": [
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              "task_e7fc90d678fa",
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 6840,
+                "configuration": 3103,
+                "savings_pct": 54.6,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": 54.6,
+              "median": 54.6,
+              "stdev": 0.0,
+              "min": 54.6,
+              "max": 54.6,
+              "n": 1,
+              "ci95": null,
+              "evidence": "anecdotal"
+            },
+            "mean_token_savings_pct": 54.6,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          },
+          "vericode_adaptive": {
+            "pairs": [
+              {
+                "rep": 1,
+                "baseline": 6840,
+                "configuration": 1911,
+                "savings_pct": 72.1,
+                "measurement": "ACTUAL_PROVIDER_USAGE"
+              }
+            ],
+            "excluded": [
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": 72.1,
+              "median": 72.1,
+              "stdev": 0.0,
+              "min": 72.1,
+              "max": 72.1,
+              "n": 1,
+              "ci95": null,
+              "evidence": "anecdotal"
+            },
+            "mean_token_savings_pct": 72.1,
+            "measurement": "ACTUAL_PROVIDER_USAGE"
+          }
+        }
+      },
+      {
+        "task": "ord_schema",
+        "title": "Checkout + business-address zod schemas (medium TS repo)",
+        "language": "typescript",
+        "repo_size": "medium",
+        "category": "feature",
+        "api_risk": "dependency_api",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "ord_modify",
+        "title": "Discount ordering and zero floor (medium TS repo)",
+        "language": "typescript",
+        "repo_size": "medium",
+        "category": "modification",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "inv_tests",
+        "title": "Write unit tests for the reports module (medium Python repo, mutation-checked)",
+        "language": "python",
+        "repo_size": "medium",
+        "category": "tests",
+        "api_risk": "test_framework",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "led_fx_bugfix",
+        "title": "Historical FX rate lookup bug (large Python repo, seeded)",
+        "language": "python",
+        "repo_size": "large",
+        "category": "bugfix",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "led_export",
+        "title": "JSON export/import of journal entries (large Python repo, pydantic 2)",
+        "language": "python",
+        "repo_size": "large",
+        "category": "feature",
+        "api_risk": "dependency_api",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      },
+      {
+        "task": "led_cashflow",
+        "title": "Monthly cash-flow report (large Python repo)",
+        "language": "python",
+        "repo_size": "large",
+        "category": "feature",
+        "api_risk": "none",
+        "configurations": {
+          "baseline": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_full": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          },
+          "vericode_adaptive": {
+            "runs": 3,
+            "completed": 0,
+            "blocked": 3,
+            "success_rate": null,
+            "first_pass_rate": null,
+            "measurement": null,
+            "total_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "total_tokens_successful": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "input_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "output_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "planner_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "coder_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_tokens": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "llm_calls": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "repair_attempts": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "duration_s": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "test_pass_rate": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_shipped": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0
+            },
+            "api_problems_detail": [],
+            "execution_paths": {},
+            "failures": [
+              {
+                "rep": 1,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 2,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              },
+              {
+                "rep": 3,
+                "status": "BLOCKED",
+                "error": "not run: provider blocked a run (LLMUnavailable: openai: rate limited (HTTP 429) after retries; provider asks to retry after 382s; limits {'x-ratelimit-limit-requests': '1000', 'x-ratelimit-rem)"
+              }
+            ],
+            "task_ids": [
+              null,
+              null,
+              null
+            ]
+          }
+        },
+        "comparisons": {
+          "vericode_full": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_full BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          },
+          "vericode_adaptive": {
+            "pairs": [],
+            "excluded": [
+              {
+                "rep": 1,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 2,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              },
+              {
+                "rep": 3,
+                "reason": "baseline BLOCKED, vericode_adaptive BLOCKED"
+              }
+            ],
+            "paired_savings": {
+              "mean": null,
+              "median": null,
+              "stdev": null,
+              "min": null,
+              "max": null,
+              "n": 0,
+              "ci95": null,
+              "evidence": "none"
+            },
+            "mean_token_savings_pct": null,
+            "measurement": null
+          }
+        }
+      }
+    ],
+    "overall": {
+      "vericode_adaptive": {
+        "tasks_compared": 5,
+        "tasks_total": 12,
+        "pairs": 12,
+        "token_weighted_savings_pct": 46.0,
+        "median_task_savings_pct": 45.6,
+        "tasks_with_negative_savings": 1,
+        "measurement": "ACTUAL_PROVIDER_USAGE"
+      },
+      "vericode_full": {
+        "tasks_compared": 6,
+        "tasks_total": 12,
+        "pairs": 15,
+        "token_weighted_savings_pct": 28.7,
+        "median_task_savings_pct": 36.1,
+        "tasks_with_negative_savings": 1,
+        "measurement": "ACTUAL_PROVIDER_USAGE"
+      }
+    }
+  }
+}

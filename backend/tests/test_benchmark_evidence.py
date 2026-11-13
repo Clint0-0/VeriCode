@@ -316,3 +316,16 @@ def test_drop_discards_records_for_rerun(tmp_path):
     kept = benchmark.load_records(path)
     assert [(r["task"], r["configuration"]) for r in kept] == [("summary", "baseline"), ("summary", "vericode_adaptive")]
     assert len(benchmark.load_records(path.with_suffix(".dropped.jsonl"))) == 1
+
+
+def test_load_records_keeps_last_record_per_run(tmp_path):
+    path = tmp_path / "runs.jsonl"
+    rows = [_rec("t", 1, "baseline", status="BLOCKED", tokens=0), _rec("t", 1, "x"), _rec("t", 1, "baseline", tokens=900)]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    recs = benchmark.load_records(path)
+    assert len(recs) == 2 and next(r for r in recs if r["configuration"] == "baseline")["total_tokens"] == 900
+
+
+def test_provider_account_ids_are_redacted():
+    from vericode.security import redact
+    assert redact("in organization `org_01m6vgesmhe2xs91b47gjn77c8` service") == "in organization `org_[redacted]` service"

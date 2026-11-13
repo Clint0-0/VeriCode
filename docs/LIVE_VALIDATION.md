@@ -232,3 +232,16 @@ Groq quota seen in this run: 1,000 requests and 8,000 tokens per minute.
 
 Rate-limit behaviour verified live: `retry-after` is honoured. Quota-stopped sections are classified BLOCKED, not
 FAILED. Waits above the configured limit stop immediately instead of retrying.
+
+# Benchmark version 2 (2026-11-13, branch `feat/vericode-benchmark-evidence`)
+
+Dispatched through *Live validation* with `only=benchmark` (runs `benchmark.yml` from the branch).
+
+| Run | Commit | Scope | Outcome |
+|---|---|---|---|
+| [43383594201](https://github.com/Clint0-0/VeriCode/actions/runs/43383594201) | `fde7661` | plan only (all 12 tasks, 4 configurations) | ESTIMATED ~660k tokens for 3 repetitions; no LLM calls |
+| [43383744860](https://github.com/Clint0-0/VeriCode/actions/runs/43383744860) | `fde7661` | batch 1: summary, signup, ord_bugfix, inv_restock, inv_refactor, led_fx_bugfix × baseline/full/adaptive × 3 | **ACTUAL**: 45 runs on 5 tasks (198,676 tokens). Found two defects: an audit false positive on pydantic model fields (inv_restock adaptive 12–19k tokens) and a 413 the fit-and-retry missed (led_fx_bugfix baseline), which also stopped the batch |
+| [43386909599](https://github.com/Clint0-0/VeriCode/actions/runs/43386909599) | `ba29295` | batch 2: resume of batch 1, all 12 tasks, inv_restock adaptive dropped for re-run | **ACTUAL** for 3 `users` runs, then **BLOCKED** by the daily token cap (429, retry-after 382 s) |
+
+Results, stage breakdown, ablation and limitations:
+[submission/benchmark-results/2026-11-13](submission/benchmark-results/2026-11-13/README.md).

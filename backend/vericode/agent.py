@@ -457,6 +457,7 @@ class TaskRunner:
         result["duration_s"] = round(time.time() - t0, 2)
         result["timings_s"] = self.timings
         result["tokens"] = summarize_ledger(self.ledger)
+        result["models"] = sorted({r.model for r in self.ledger if getattr(r, "model", None)})
         result["search_calls"] = self.tavily.calls
         with db.tx() as c:
             c.execute("UPDATE tasks SET status=?, outcome=?, finished_at=?, success=?, preflight_json=?, result_json=?, events_json=?, provider=? WHERE id=?",

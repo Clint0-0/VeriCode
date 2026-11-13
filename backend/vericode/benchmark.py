@@ -119,7 +119,7 @@ def make_record(task: dict, rep: int, config: str, result: dict, task_id: str | 
         "api_problems_detail": [f"{p.get('planned_api')} [{p.get('status')}]" for p in (result.get("api_audit") or {}).get("problems", [])][:8],
         "preflight_findings": result.get("_preflight_findings"),
         "error": (result.get("error") or "")[:600] or None, "snapshot": snapshot, "code_version": code_version(),
-        "provider": result.get("provider"), "finished_at": time.time(),
+        "provider": result.get("provider"), "models": result.get("models") or [], "finished_at": time.time(),
     }
 
 
@@ -174,7 +174,9 @@ def summarize(records: list[dict], catalog: list[dict] | None = None, baseline: 
                 "api_problems_shipped": _stats([r["api_problems_shipped"] for r in ran if r.get("api_problems_shipped") is not None]),
                 "api_problems_detail": sorted({d for r in ran for d in (r.get("api_problems_detail") or [])}),
                 "execution_paths": {p: sum(1 for r in ran if r.get("execution_path") == p) for p in {r.get("execution_path") for r in ran} if p},
-                "failures": [{"rep": r["rep"], "status": r["status"], "error": r.get("error")} for r in rs if r["status"] != "SUCCESS"],
+                "failures": [{"rep": r["rep"], "status": r["status"],
+                              "error": r.get("error") or (f"checks still failing after {r.get('repair_attempts', 0)} repair attempt(s)"
+                                                          if r["status"] == "FAILED" else None)} for r in rs if r["status"] != "SUCCESS"],
                 "task_ids": [r.get("task_id") for r in rs],
             }
         comparisons = {}
@@ -227,17 +229,22 @@ def summarize(records: list[dict], catalog: list[dict] | None = None, baseline: 
 
 # ------------------------------------------------------------------------------------------- execution
 def load_records(path: str | Path | None) -> list[dict]:
+    """Run records from a JSONL file. A resumed batch appends a fresh record for a run that was BLOCKED earlier, so
+    only the LAST record per (task, repetition, configuration) counts."""
     if not path or not Path(path).exists():
         return []
-    out = []
+    latest: dict[tuple, dict] = {}
     for line in Path(path).read_text().splitlines():
         line = line.strip()
         if line:
             try:
-                out.append(json.loads(line))
+                r = json.loads(line)
             except ValueError:
                 continue
-    return out
+            key = (r.get("task"), r.get("rep"), r.get("configuration"))
+            latest.pop(key, None)
+            latest[key] = r
+    return list(latest.values())
 
 
 def _append(path: str | Path | None, rec: dict) -> None:
@@ -318,7 +325,7 @@ def run_benchmark(task_ids: list[str] | None = None, runs: int = 1, max_repairs:
                                                             "false_positive_rate": round(d["fp"] / (d["fp"] + d["tn"]), 2) if d["fp"] + d["tn"] else None}
     primary = next((c for c in ("vericode_adaptive", "vericode_full", "context_only") if c in cfgs), None)
     legacy = [_legacy_task(t, primary) for t in summary["tasks"]]
-    labels = {r["measurement"] for r in records if r.get("measurement")}
+    labels = {r["measurement"] for r in records if r.get("measurement") and r.get("llm_calls")}
     measurement = "MOCK" if "MOCK" in labels else "ESTIMATED" if "ESTIMATED" in labels else ("ACTUAL_PROVIDER_USAGE" if labels else "NONE")
     from .llm import provider_status
     ps = provider_status()

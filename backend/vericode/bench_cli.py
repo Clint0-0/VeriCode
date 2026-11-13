@@ -20,7 +20,7 @@ from . import benchmark
 from .agent import CODER_SYSTEM, deps_compact, deps_summary, file_block, load_catalog, outline
 from .api_risk import assess
 from .config import ROOT, settings
-from .llm import estimate_tokens, provider_status
+from .llm import estimate_tokens
 from .repo_intel import conventions_text, inspect_project, select_relevant_files
 from .skeleton import PLANNER_SYSTEM
 
@@ -90,10 +90,19 @@ def markdown(result: dict, catalog: list[dict]) -> str:
                      f"{_n(c['total_tokens']['mean'])} ({_n(c['input_tokens']['mean'])}/{_n(c['output_tokens']['mean'])}) | "
                      f"{_n(c['planner_tokens']['mean'])} | {_n(c['repair_attempts']['mean'])} | {_n(c['api_problems_shipped']['mean'])} | {sav} |")
     fails = [(t["task"], cfg, f) for t in s["tasks"] for cfg, c in t["configurations"].items() for f in c["failures"]]
-    if fails:
+    ran = [x for x in fails if not (x[2].get("error") or "").startswith("not run:")]
+    if ran:
         L += ["", "## Failed and blocked runs", "", "| Task | Configuration | Rep | Status | Detail |", "|---|---|---|---|---|"]
-        for task, cfg, f in fails:
-            L.append(f"| {task} | {cfg} | {f['rep']} | {f['status']} | {(f.get('error') or '').replace('|', '/')[:160]} |")
+        for task, cfg, f in ran:
+            L.append(f"| {task} | {cfg} | {f['rep']} | {f['status']} | {(f.get('error') or '').replace('|', '/')[:200]} |")
+    not_run: dict[str, int] = {}
+    for task, _cfg, f in fails:
+        if (f.get("error") or "").startswith("not run:"):
+            not_run[task] = not_run.get(task, 0) + 1
+    if not_run:
+        reasons = sorted({f["error"].split("(")[0].strip() for _t, _c, f in fails if (f.get("error") or "").startswith("not run:")})
+        L += ["", "## Not run (budget or provider stop; recorded as BLOCKED, re-run on resume)", "",
+              ", ".join(f"{k}: {v}" for k, v in not_run.items()) + f". Reason: {'; '.join(reasons)[:300]}."]
     return "\n".join(L) + "\n"
 
 
@@ -150,9 +159,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.report_only:
         records = benchmark.load_records(a.records)
-        result = {"summary": benchmark.summarize(records, catalog), "records": records, "created_at": time.time(),
-                  "measurement_labels": sorted({r["measurement"] for r in records if r.get("measurement")}),
-                  **{k: v for k, v in provider_status().items() if k in ("provider", "coder_model", "planner_model")},
+        models = sorted({m for r in records for m in (r.get("models") or [])})
+        result = {"summary": benchmark.summarize(records, catalog), "records": records, "created_at": max((r.get("finished_at") or 0 for r in records), default=time.time()),
+                  "measurement_labels": sorted({r["measurement"] for r in records if r.get("measurement") and r.get("llm_calls")}),
+                  # identity of the runs comes from the records themselves, never from this machine's settings
+                  "provider": ", ".join(sorted({r["provider"] for r in records if r.get("provider")})) or None,
+                  "coder_model": ", ".join(models) or None, "planner_model": ", ".join(models) or None,
+                  "code_versions": sorted({r["code_version"] for r in records if r.get("code_version")}),
+                  "source_runs": sorted({r["source_run"] for r in records if r.get("source_run")}),
                   "runs_per_mode": max((r["rep"] for r in records), default=0), "repair_budget": settings.max_repair_attempts}
     else:
         result = benchmark.run_benchmark(ids or None, a.runs, live=not a.no_live_docs, configurations=cfgs, records_path=a.records or None,
@@ -161,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
                                                                   f"{r['total_tokens']} tokens ({r['measurement']}) path={r.get('execution_path')}", flush=True))
     report = markdown(result, catalog)
     summary = json.dumps({k: result.get(k) for k in ("id", "created_at", "provider", "coder_model", "planner_model", "runs_per_mode",
-                                                     "repair_budget", "measurement_labels", "stopped", "tokens_spent_actual", "summary")},
+                                                     "repair_budget", "measurement_labels", "stopped", "tokens_spent_actual",
+                                                     "code_versions", "source_runs", "summary")},
                          indent=2, default=str)
     _secret_free(report + summary)
     if a.out:
