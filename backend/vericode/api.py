@@ -477,9 +477,12 @@ def dashboard():
     tok = q("SELECT COALESCE(SUM(input_tokens+output_tokens),0) n, COALESCE(SUM(CASE WHEN estimated=1 OR provider='mock' THEN 1 ELSE 0 END),0) est, COUNT(*) calls FROM token_usage")
     latest_bench = db.row("SELECT result_json FROM benchmarks ORDER BY created_at DESC LIMIT 1")
     return {
-        "coding_tasks": q("SELECT COUNT(*) n FROM tasks WHERE mode IN ('vericode','baseline')")["n"],
-        "successful_tasks": q("SELECT COUNT(*) n FROM tasks WHERE success=1 AND mode IN ('vericode','baseline')")["n"],
-        "preflight_runs": q("SELECT COUNT(*) n FROM tasks WHERE mode IN ('vericode','preflight') AND preflight_json IS NOT NULL")["n"],
+        # every coding configuration counts (vericode, vericode_full, vericode_adaptive, context_only, baseline)
+        "coding_tasks": q("SELECT COUNT(*) n FROM tasks WHERE mode != 'preflight'")["n"],
+        "successful_tasks": q("SELECT COUNT(*) n FROM tasks WHERE success=1 AND mode != 'preflight'")["n"],
+        "failed_tasks": q("SELECT COUNT(*) n FROM tasks WHERE outcome='failed' AND mode != 'preflight'")["n"],
+        "preflight_runs": q("SELECT COUNT(*) n FROM tasks WHERE mode NOT IN ('baseline','context_only') AND preflight_json IS NOT NULL "
+                            "AND preflight_json LIKE '%\"findings\"%'")["n"],
         "stale_claims": q("SELECT COUNT(*) n FROM claims WHERE status IN ('CONTRADICTED','POTENTIALLY_STALE')")["n"],
         "claims_checked": q("SELECT COUNT(*) n FROM claims")["n"],
         "total_tokens": tok["n"], "llm_calls": tok["calls"], "estimated_calls": tok["est"],

@@ -372,3 +372,14 @@ def test_boolean_settings_are_strict(client):
     assert client.put("/api/settings", json={"adaptive_execution": "maybe"}).status_code == 400
     assert client.put("/api/settings", json={"adaptive_execution": "off"}).json()["adaptive_execution"] is False
     assert client.put("/api/settings", json={"adaptive_execution": True}).json()["adaptive_execution"] is True
+
+
+def test_dashboard_counts_every_coding_configuration(client):
+    from vericode import db
+    with db.tx() as c:
+        for i, (mode, ok, outcome) in enumerate([("vericode_adaptive", 1, "succeeded"), ("vericode_full", 0, "failed"),
+                                                 ("context_only", 1, "succeeded"), ("baseline", 0, "failed"), ("preflight", 1, "succeeded")]):
+            c.execute("INSERT INTO tasks(id, project_path, prompt, mode, status, outcome, success, created_at) VALUES(?,?,?,?,?,?,?,?)",
+                      (f"t{i}", "p", "x", mode, outcome, outcome, ok, float(i)))
+    d = client.get("/api/dashboard").json()
+    assert (d["coding_tasks"], d["successful_tasks"], d["failed_tasks"]) == (4, 2, 2)
