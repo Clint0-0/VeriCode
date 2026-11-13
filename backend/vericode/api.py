@@ -424,6 +424,10 @@ def start_benchmark(req: BenchReq):
     if _bench_state["running"]:
         raise HTTPException(409, "a benchmark is already running")
     known = {t["id"] for t in benchmark.load_catalog()}
+    # the scripted mock only knows the original demo tasks: without an explicit selection, don't queue tasks it
+    # cannot answer (they would all be BLOCKED); with a real provider the whole catalog runs
+    from .demo import DEMO3_TASKS
+    task_ids = req.task_ids or (DEMO3_TASKS if settings.effective_provider() == "mock" else None)
     unknown = [t for t in req.task_ids if t not in known]
     if unknown:
         raise HTTPException(400, f"unknown benchmark task(s): {', '.join(unknown)}; known: {', '.join(sorted(known))}")
@@ -437,7 +441,7 @@ def start_benchmark(req: BenchReq):
 
     def go():
         try:
-            benchmark.run_benchmark(req.task_ids or None, req.runs, req.max_repairs, req.live,
+            benchmark.run_benchmark(task_ids, req.runs, req.max_repairs, req.live,
                                     configurations=req.configurations or None, max_total_tokens=req.max_total_tokens)
         except Exception as e:  # surfaced via GET
             _bench_state["error"] = str(e)

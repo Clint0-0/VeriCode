@@ -383,3 +383,13 @@ def test_dashboard_counts_every_coding_configuration(client):
                       (f"t{i}", "p", "x", mode, outcome, outcome, ok, float(i)))
     d = client.get("/api/dashboard").json()
     assert (d["coding_tasks"], d["successful_tasks"], d["failed_tasks"]) == (4, 2, 2)
+
+
+def test_mock_benchmark_from_api_defaults_to_demo_tasks(client, monkeypatch):
+    from vericode import api
+    seen = {}
+    monkeypatch.setattr(api.benchmark, "run_benchmark", lambda task_ids, *a, **k: seen.setdefault("ids", task_ids))
+    monkeypatch.setattr(api.threading, "Thread", lambda target, daemon: type("T", (), {"start": lambda self: target()})())
+    assert client.post("/api/benchmarks", json={"runs": 1, "live": False}).status_code == 200
+    assert seen["ids"] == ["users", "summary", "signup"]
+    api._bench_state["running"] = False
