@@ -69,3 +69,23 @@ def test_audit_finds_deprecated_zod_use_with_named_and_namespace_imports(tmp_pat
     out = api_audit.audit_typescript(inspect_project(proj), [("src/gen.ts", None)], deps_root=str(DEMO.resolve()))
     dep = sorted((x["line"], x["status"]) for x in out if x["status"] == "DEPRECATED")
     assert dep == [(5, "DEPRECATED"), (7, "DEPRECATED")], out  # real calls only (multiline, alias), not comment/string
+
+
+# the twelve APIs from the ts_orders checkout task, with the planner's argument expressions
+TWELVE = [("z.object", "function", []), ("z.string", "function", []), ("z.number", "function", []), ("z.array", "function", []),
+          ("ZodString.email", "method", []), ("ZodString.regex", "method", ["/^[A-Z]{3}-\\d{3}$/"]),
+          ("ZodNumber.int", "method", []), ("ZodNumber.min", "method", ["1"]), ("ZodNumber.max", "method", ["99"]),
+          ("ZodArray.min", "method", ["1"]), ("ZodString.optional", "method", []), ("ZodSchema.safeParse", "method", ["input"])]
+
+
+@pytest.mark.parametrize("name,type_,args", TWELVE)
+def test_twelve_checkout_apis_verified(env, name, type_, args):
+    f = _verify(env, name, type_, args)
+    assert f.status == "VERIFIED_LOCAL" and f.verdict == "VERIFIED", (f.status, f.explanation, f.local.get("error"))
+
+
+@pytest.mark.parametrize("name,type_,args,expected", [("ZodString.emial", "method", [], "NOT_FOUND"),
+                                                     ("ZodNumber.int", "method", ["5"], "INCOMPATIBLE"),
+                                                     ("ZodArray.minimum", "method", ["1"], "NOT_FOUND")])
+def test_wrong_checkout_apis_still_flagged(env, name, type_, args, expected):
+    assert _verify(env, name, type_, args).status == expected

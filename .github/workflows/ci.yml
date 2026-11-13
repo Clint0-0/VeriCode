@@ -78,7 +78,7 @@ jobs:
           npm ci --prefix demos/ts_project --no-audit --no-fund
           npm ci --prefix tools/ts-checker --no-audit --no-fund
       - name: Windows launch tests
-        run: python -m pytest -q -p no:cacheprovider backend/tests -k "windows_exec or ts_verification" -rs
+        run: python -m pytest -q -p no:cacheprovider backend/tests -k "windows_exec or ts_verification or preflight_env" -rs
 
   sandbox-image:
     name: Self-contained sandbox image (build + run sandbox tests in it)

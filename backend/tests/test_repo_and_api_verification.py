@@ -10,9 +10,9 @@ from vericode.verify_api import verify_planned_api
 def test_declared_vs_installed_versions(fake_py_project):
     env = inspect_project(fake_py_project, use_cache=False)
     fl = env.dep("fakelib")
-    assert fl.declared == ">=1.0" and fl.installed == "2.1.0" and fl.status == "ok"
+    assert fl.declared == ">=1.0" and fl.installed == "2.1.0" and fl.status == "INSTALLED"
     missing = env.dep("missinglib")
-    assert missing.declared == "==3.0" and missing.installed is None and missing.status == "missing"
+    assert missing.declared == "==3.0" and missing.installed is None and missing.status == "NOT_INSTALLED"
     assert ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"] in env.test_commands
 
 
@@ -20,8 +20,8 @@ def test_no_venv_never_reports_declared_as_installed(tmp_path):
     (tmp_path / "requirements.txt").write_text("requests>=2\n")
     env = inspect_project(tmp_path, use_cache=False)
     d = env.dep("requests")
-    assert d.installed is None and d.status == "not_installed_env_unavailable"
-    assert any("NOT installed" in w for w in env.warnings)
+    assert d.installed is None and d.status == "UNKNOWN" and env.environments["python"]["status"] == "UNAVAILABLE"
+    assert any("could NOT be verified" in w for w in env.warnings)
 
 
 def test_lockfile_parsers():
@@ -106,7 +106,8 @@ def test_uncertain_when_env_missing(tmp_path):
     (tmp_path / "requirements.txt").write_text("fakelib>=1\n")
     env = inspect_project(tmp_path, use_cache=False)
     f = _check(env, "connect")
-    assert f.status == "NOT_FOUND" and "not installed" in f.explanation
+    # no environment: the package's absence is unknown, so its API is NOT checked (never NOT_FOUND)
+    assert f.status == "UNCERTAIN" and f.environment_status == "UNAVAILABLE" and "NOT checked" in f.explanation
 
 
 def test_real_pydantic_incompatibilities(sample_project):
