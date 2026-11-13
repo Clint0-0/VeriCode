@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.2 — TypeScript verification on Windows (branch `fix/typescript-ast-zod-verification`)
+- **Fixed `TypeError: Cannot read properties of undefined (reading 'statements')`** in
+  `tools/ts-checker/check.cjs` (`main`, `sf.statements`): the in-memory probe files were keyed by `path.join`
+  (`D:\...`) while TypeScript asks the compiler host for normalised `D:/...` names, so the probe never loaded on
+  Windows. Every TypeScript pre-flight check crashed, and the crash was reported as **NOT_FOUND (high)**: valid zod
+  APIs (`z.object`, `z.string`, `z.number`, `z.array`, `ZodSchema.safeParse`) were flagged as missing.
+- Same root cause, also fixed: planned-call diagnostics were filtered by an un-normalised name (type errors dropped
+  on Windows); the audit's `node_modules` marker, dependency redirect and `tsconfig.json` lookup compared `\` with `/`
+  paths (the post-generation audit found nothing on Windows).
+- New status **ERROR**: a checker crash, timeout or empty output means the API was *not checked*; it is never
+  NOT_FOUND, and documentation hits cannot upgrade it. An audit that did not run, or a file it could not load, is
+  reported as ERROR instead of "no problems".
+- Audit: one finding per multiline call (was two lines); generated `.js` files audited.
+- Correction tracking ignores comments and string literals, and "corrected" is confirmed against the final
+  compiler audit (`verified: true/false`); an API the audit still reports is `still_used`.
+- CI: real zod 3.23.8 verification tests on Linux and `windows-latest`.
+
 ## 2.4.1 — Windows process sandbox fix (branch `fix/windows-process-sandbox-winerror2`)
 - **Fixed `FileNotFoundError: [WinError 2]` right after the CODER stage on Windows.** `run_command` passed
   `["npm", "test"]` to `subprocess.run` unresolved; Windows does not apply PATHEXT there, so `npm.cmd` was never
