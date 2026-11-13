@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Card, Empty, ErrorBox, inputCls, Spinner, useApi } from '../components/ui'
+import { Badge, Card, Empty, ErrorBox, inputCls, Select, Spinner, useApi } from '../components/ui'
 
 export default function Evidence({ param }: { param?: string }) {
   const { data, error, loading } = useApi<any[]>(param ? `/evidence?analysis_id=${param}` : '/evidence')
@@ -11,9 +11,9 @@ export default function Evidence({ param }: { param?: string }) {
   return (
     <Card title={param ? `Evidence for analysis ${param}` : 'All retrieved evidence'} actions={<>
       <input aria-label="Filter" className={`${inputCls} w-56 py-1`} placeholder="Filter claim/domain…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <select aria-label="Outcome" className={`${inputCls} w-36 py-1`} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+      <Select size="sm" aria-label="Outcome" className="w-36" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
         <option value="">all outcomes</option>{['support', 'contradict', 'neutral', 'irrelevant'].map((o) => <option key={o}>{o}</option>)}
-      </select>
+      </Select>
     </>}>
       {!rows.length ? <Empty>No evidence yet. Run the Stale-Answer Detector.</Empty> : (
         <div className="overflow-x-auto">

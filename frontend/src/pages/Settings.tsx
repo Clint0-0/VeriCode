@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, fmt } from '../api'
 import { IntegrationStatus } from '../components/Integrations'
-import { Badge, Button, Card, Empty, ErrorBox, Field, inputCls, Mono, Spinner, useApi } from '../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Field, inputCls, Mono, Select, Spinner, useApi } from '../components/ui'
 
 export default function Settings(_: { param?: string }) {
   const s = useApi<any>('/settings')
@@ -44,9 +44,9 @@ export default function Settings(_: { param?: string }) {
       <Card title="Runtime configuration" actions={<Button onClick={save}>Save</Button>}>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Model provider">
-            <select aria-label="Model provider" className={inputCls} value={form.llm_provider} onChange={(e) => setForm({ ...form, llm_provider: e.target.value })}>
+            <Select aria-label="Model provider" className="w-full" value={form.llm_provider} onChange={(e) => setForm({ ...form, llm_provider: e.target.value })}>
               {['anthropic', 'openai', 'mock'].map((p) => <option key={p}>{p}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Coder model id">{txt('coder_model', 'set VERICODE_CODER_MODEL')}</Field>
           <Field label="Planner model id">{txt('planner_model', 'defaults to coder model')}</Field>
@@ -60,14 +60,14 @@ export default function Settings(_: { param?: string }) {
           <Field label="Cost $/Mtok input">{num('cost_input_per_mtok')}</Field>
           <Field label="Cost $/Mtok output">{num('cost_output_per_mtok')}</Field>
           <Field label="Execution sandbox" hint="auto = Docker when the daemon is reachable">
-            <select aria-label="Execution sandbox" className={inputCls} value={form.sandbox_backend} onChange={(e) => setForm({ ...form, sandbox_backend: e.target.value })}>
+            <Select aria-label="Execution sandbox" className="w-full" value={form.sandbox_backend} onChange={(e) => setForm({ ...form, sandbox_backend: e.target.value })}>
               {['auto', 'docker', 'process'].map((p) => <option key={p}>{p}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Tavily search depth">
-            <select aria-label="Tavily search depth" className={inputCls} value={form.tavily_search_depth} onChange={(e) => setForm({ ...form, tavily_search_depth: e.target.value })}>
+            <Select aria-label="Tavily search depth" className="w-full" value={form.tavily_search_depth} onChange={(e) => setForm({ ...form, tavily_search_depth: e.target.value })}>
               {['basic', 'advanced', 'fast', 'ultra-fast'].map((p) => <option key={p}>{p}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Default workspace">{txt('default_workspace')}</Field>
           <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={!!form.llm_stream} onChange={(e) => setForm({ ...form, llm_stream: e.target.checked })} /> Stream coder/repair responses (usage from stream events)</label>

@@ -3,7 +3,7 @@ import { api } from '../api'
 import { FindingsList } from '../components/Findings'
 import { ConfidenceHeatmap } from '../components/Heatmap'
 import { TokenTable } from '../components/TaskReport'
-import { Badge, Button, Card, Empty, ErrorBox, Field, inputCls, Mono, Spinner, useApi } from '../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Field, inputCls, Mono, Select, Spinner, useApi } from '../components/ui'
 
 export default function Preflight(_: { param?: string }) {
   const ws = useApi<any[]>('/workspaces')
@@ -36,9 +36,9 @@ export default function Preflight(_: { param?: string }) {
     <div className="space-y-5">
       <Card title="Project environment" actions={<Button variant="ghost" onClick={inspect} disabled={!!busy}>{busy === 'inspect' ? 'Inspecting…' : 'Inspect'}</Button>}>
         <div className="mb-3 max-w-xs">
-          <select aria-label="Workspace" className={inputCls} value={path} onChange={(e) => setPath(e.target.value)}>
+          <Select aria-label="Workspace" className="w-full" value={path} onChange={(e) => setPath(e.target.value)}>
             {(ws.data ?? []).map((w) => <option key={w.name} value={w.name}>{w.name}</option>)}
-          </select>
+          </Select>
         </div>
         {!envData ? <Empty>Inspect a workspace to see declared, resolved and installed dependency versions.</Empty> : (
           <div className="space-y-3">
@@ -66,10 +66,10 @@ export default function Preflight(_: { param?: string }) {
 
       <Card title="Run pre-flight for a task (planner + local + live verification, no code generation)">
         <div className="flex gap-2">
-          <select aria-label="Demo task" className={`${inputCls} max-w-xs`} onChange={(e) => { const t = cat.data?.find((x) => x.id === e.target.value); if (t) setTask(t.prompt) }}>
+          <Select aria-label="Demo task" className="w-64 shrink-0" value="" onChange={(e) => { const t = cat.data?.find((x) => x.id === e.target.value); if (t) setTask(t.prompt) }}>
             <option value="">— load demo task —</option>
             {(cat.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.id}</option>)}
-          </select>
+          </Select>
           <input aria-label="Task" className={inputCls} value={task} onChange={(e) => setTask(e.target.value)} placeholder="Task description" />
           <Button onClick={run} disabled={!!busy || task.length < 3}>{busy === 'preflight' ? 'Running…' : 'Run pre-flight'}</Button>
         </div>
@@ -102,9 +102,9 @@ export default function Preflight(_: { param?: string }) {
             <Field key={k} label={k}><input aria-label={k} className={inputCls} value={(manual as any)[k]} onChange={(e) => setManual({ ...manual, [k]: e.target.value })} /></Field>
           ))}
           <Field label="type">
-            <select aria-label="type" className={inputCls} value={manual.type} onChange={(e) => setManual({ ...manual, type: e.target.value })}>
+            <Select aria-label="type" className="w-full" value={manual.type} onChange={(e) => setManual({ ...manual, type: e.target.value })}>
               {['function', 'class', 'method', 'decorator', 'attribute', 'module'].map((t) => <option key={t}>{t}</option>)}
-            </select>
+            </Select>
           </Field>
           <div className="flex items-end"><Button onClick={check} disabled={!!busy}>Verify</Button></div>
         </div>

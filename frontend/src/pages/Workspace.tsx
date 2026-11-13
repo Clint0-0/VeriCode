@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { TaskReport } from '../components/TaskReport'
-import { Button, Card, ErrorBox, Field, inputCls, Spinner, useApi } from '../components/ui'
+import { Button, Card, ErrorBox, Field, inputCls, Select, Spinner, useApi } from '../components/ui'
 
 export default function Workspace(_: { param?: string }) {
   const ws = useApi<any[]>('/workspaces')
@@ -38,21 +38,21 @@ export default function Workspace(_: { param?: string }) {
       <Card title="New coding task">
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Workspace">
-            <select aria-label="Workspace" className={inputCls} value={path} onChange={(e) => setPath(e.target.value)}>
+            <Select aria-label="Workspace" className="w-full" value={path} onChange={(e) => setPath(e.target.value)}>
               {(ws.data ?? []).map((w) => <option key={w.name} value={w.name}>{w.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Demo task (optional)" hint="Bundled tasks include acceptance tests">
-            <select aria-label="Demo task" className={inputCls} value={catalogId} onChange={(e) => pick(e.target.value)}>
+            <Select aria-label="Demo task" className="w-full" value={catalogId} onChange={(e) => pick(e.target.value)}>
               <option value="">— custom —</option>
               {(cat.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Mode">
-            <select aria-label="Mode" className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <Select aria-label="Mode" className="w-full" value={mode} onChange={(e) => setMode(e.target.value as any)}>
               <option value="vericode">VeriCode (pre-flight + surgical context)</option>
               <option value="baseline">Baseline (whole repo, no pre-flight)</option>
-            </select>
+            </Select>
           </Field>
         </div>
         <div className="mt-4">

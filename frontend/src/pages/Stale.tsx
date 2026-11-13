@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, fmt } from '../api'
 import { KV } from '../components/Findings'
-import { Badge, Button, Card, Empty, ErrorBox, Expand, Field, inputCls, Notice, Spinner, Stat } from '../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Expand, Field, inputCls, Notice, Select, Spinner, Stat } from '../components/ui'
 
 const STATUS_BG: Record<string, string> = {
   CURRENT_SUPPORTED: 'bg-emerald-500/15 decoration-emerald-400', CONTRADICTED: 'bg-rose-500/20 decoration-rose-400',
@@ -195,9 +195,9 @@ export default function Stale({ param }: { param?: string }) {
             <label className="flex items-center gap-1.5"><input type="radio" checked={mode === 'fixture'} onChange={() => setMode('fixture')} /> Offline fixture (labelled, reproducible)</label>
             <label className="flex items-center gap-1.5" title="Uses the planner model; requires a real LLM provider"><input type="checkbox" checked={llmExtract} onChange={(e) => setLlmExtract(e.target.checked)} /> LLM claim extraction</label>
             <label className="flex items-center gap-1.5" title="Check claims about libraries against the packages installed in this workspace (combined workflow)">Check API claims against installed packages of
-              <select aria-label="Installed packages workspace" className="rounded border border-ink-600 bg-ink-950 px-1.5 py-0.5 text-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+              <Select size="sm" aria-label="Installed packages workspace" className="inline-block w-40" value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
                 <option value="">— none —</option>{workspaces.map((w) => <option key={w.name} value={w.name}>{w.name}</option>)}
-              </select>
+              </Select>
             </label>
           </div>
           <Button onClick={analyze} disabled={busy || answer.length < 10}>{busy ? 'Verifying…' : 'Extract & verify claims'}</Button>

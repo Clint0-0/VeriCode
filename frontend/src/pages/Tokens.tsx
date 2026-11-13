@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, fmt, MEASUREMENT_TONE } from '../api'
-import { Badge, Button, Card, Empty, ErrorBox, Notice, Spinner, Stat, useApi } from '../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Notice, Select, Spinner, Stat, useApi } from '../components/ui'
 
 function Bars({ base, veri }: { base: number; veri: number }) {
   const max = Math.max(base, veri, 1)
@@ -82,13 +82,13 @@ export default function Tokens(_: { param?: string }) {
       )}
 
       <Card title="Benchmark: baseline vs VeriCode (identical tasks, model, repo state, tests, repair budget)" actions={<>
-        <select aria-label="Measurement" className="rounded border border-ink-600 bg-ink-950 px-2 py-1 text-sm" value={kind} onChange={(e) => setKind(e.target.value as any)}>
+        <Select size="sm" aria-label="Measurement" className="w-52" value={kind} onChange={(e) => setKind(e.target.value as any)}>
           <option value="ACTUAL_PROVIDER_USAGE">Real provider results</option>
           <option value="MOCK_OR_ESTIMATED">Mock / estimated results</option>
-        </select>
-        <select aria-label="Runs" className="rounded border border-ink-600 bg-ink-950 px-2 py-1 text-sm" value={runs} onChange={(e) => setRuns(+e.target.value)}>
+        </Select>
+        <Select size="sm" aria-label="Runs" className="w-36" value={runs} onChange={(e) => setRuns(+e.target.value)}>
           {[1, 2, 3, 5].map((n) => <option key={n} value={n}>{n} run{n > 1 ? 's' : ''}/mode</option>)}
-        </select>
+        </Select>
         <Button onClick={start} disabled={b.data?.running}>{b.data?.running ? 'Running…' : 'Run benchmark'}</Button>
       </>}>
         <ErrorBox error={err ?? (b.data?.error ? { message: b.data.error } : null)} />
