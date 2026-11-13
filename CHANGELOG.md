@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.5.0 — cross-language pre-flight accuracy (branch `fix/preflight-cross-language-verification`)
+- **Python environment discovery** (`vericode/pyenv.py`): in-project `.venv`/`venv`/`env` (Windows `Scripts\python.exe`,
+  POSIX `bin/python`), `VIRTUAL_ENV` only when inside the workspace, Poetry and Pipenv environments located by their
+  own path-hash naming, Conda via `environment.yml`, and an interpreter the user chooses per workspace on the
+  Pre-Flight page (validated by launching it; stored in settings). Statuses AVAILABLE / UNAVAILABLE / AMBIGUOUS /
+  CONFIGURATION_ERROR. VeriCode's own interpreter and global installs are never used.
+- **Package statuses separate from the environment**: INSTALLED, NOT_INSTALLED (environment available, package
+  absent), VERSION_MISMATCH (vs lockfile or declared range), UNKNOWN (no usable environment), UNRESOLVED. More
+  manifests/lockfiles: Pipfile, Pipfile.lock, setup.cfg, setup.py (literal `install_requires`, never executed),
+  environment.yml.
+- **Fixed: an unavailable environment produced NOT_FOUND** ("declared but not installed") for every API of that
+  package. It is now UNCERTAIN with the environment status and setup instructions.
+- **Shared result model**: each finding has `verdict` (VERIFIED / NOT_FOUND / UNCERTAIN / ERROR: does the API exist in
+  the installed package), `environment_status`, declared/resolved/installed versions and `task_id`. One summary
+  (`verify_api.summarize`) feeds the run log, the stored report and the UI. **Fixed: the run log said "Verified N
+  APIs"** for N *analyzed* APIs; it now reads "Analyzed N of M planned APIs: x verified, y not found, …".
+- **Pydantic v2 moves**: `pydantic.BaseSettings` stays NOT_FOUND, and the correction now checks whether
+  `pydantic-settings` is declared/installed and whether `pydantic_settings.BaseSettings` really exists there.
+- **Fixed (audit)**: a removed API used only as a bare-name base class through an aliased import
+  (`from pydantic import BaseSettings as BS; class T(BS)`) was missed.
+- **Fixed (UI)**: switching workspace on the Pre-Flight page kept the previous workspace's results; a slow response
+  for a previous task could overwrite the current task's report (`useApi`). Reports show workspace and run id.
+- Pre-Flight page: manifest / lockfile / environment / installed-inspection indicators, environment explanation,
+  interpreter selection, verdict counts (planned, analyzed, verified, not found, uncertain, errors).
+
 ## 2.4.2 — TypeScript verification on Windows (branch `fix/typescript-ast-zod-verification`)
 - **Fixed `TypeError: Cannot read properties of undefined (reading 'statements')`** in
   `tools/ts-checker/check.cjs` (`main`, `sf.statements`): the in-memory probe files were keyed by `path.join`
