@@ -1,6 +1,6 @@
 import { Badge, toneOf } from './ui'
 
-const LEGEND = ['VERIFIED_LOCAL', 'VERIFIED_LIVE', 'STALE', 'DEPRECATED', 'INCOMPATIBLE', 'NOT_FOUND', 'UNCERTAIN', 'NOT_CHECKED']
+const LEGEND = ['VERIFIED_LOCAL', 'VERIFIED_LIVE', 'STALE', 'DEPRECATED', 'INCOMPATIBLE', 'NOT_FOUND', 'UNCERTAIN', 'ERROR', 'NOT_CHECKED']
 const BAR: Record<string, string> = { green: 'bg-ok', amber: 'bg-warn', red: 'bg-err', blue: 'bg-info', gray: 'bg-fg-subtle' }
 
 /** API confidence overview: one row per planned library, one cell per planned API with its verification status.

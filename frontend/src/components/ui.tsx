@@ -70,7 +70,7 @@ export const STATUS_TONE: Record<string, string> = {
   VERIFIED_LOCAL: 'green', VERIFIED_LIVE: 'green', CURRENT_SUPPORTED: 'green', succeeded: 'green', ok: 'green', SUCCESS: 'green',
   STALE: 'amber', DEPRECATED: 'amber', POTENTIALLY_STALE: 'amber', UNCERTAIN: 'amber', CONFLICTING_EVIDENCE: 'amber', UNVERIFIED: 'amber', partial: 'amber', BLOCKED: 'amber',
   INCOMPATIBLE: 'red', NOT_FOUND: 'red', CONTRADICTED: 'red', failed: 'red', FAILED: 'red',
-  NOT_CHECKED: 'gray', NOT_APPLICABLE: 'gray', queued: 'gray',
+  NOT_CHECKED: 'gray', NOT_APPLICABLE: 'gray', queued: 'gray', ERROR: 'gray',  // ERROR = verification tool failed: not checked, not missing
 }
 export function toneOf(status: unknown): string {
   const s = String(status)
