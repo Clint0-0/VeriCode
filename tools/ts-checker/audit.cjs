@@ -13,12 +13,14 @@ function readStdin() {
   return new Promise((res) => { let d = ''; process.stdin.on('data', (c) => (d += c)); process.stdin.on('end', () => res(d)) })
 }
 
-const NM = `${path.sep}node_modules${path.sep}`
+const norm = (p) => p.replace(/\\/g, '/')
+const NM = '/node_modules/'  // TypeScript file names always use '/', also on Windows
 
 function pkgOf(file) {
+  file = norm(file)
   const i = file.lastIndexOf(NM)
   if (i < 0) return null
-  const rest = file.slice(i + NM.length).split(path.sep)
+  const rest = file.slice(i + NM.length).split('/')
   const name = rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0]
   const root = file.slice(0, i + NM.length) + name
   let version = null
@@ -48,9 +50,9 @@ function loadOptions(root) {
   const cfg = ts.findConfigFile(root, ts.sys.fileExists, 'tsconfig.json')
   const base = { strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     esModuleInterop: true, skipLibCheck: true, allowJs: true, checkJs: false, noEmit: true, types: [] }
-  if (!cfg || !cfg.startsWith(root)) return base
+  if (!cfg || !norm(cfg).startsWith(norm(root))) return base  // findConfigFile returns '/' paths, root may use '\\'
   const parsed = ts.parseJsonConfigFileContent(ts.readConfigFile(cfg, ts.sys.readFile).config || {}, ts.sys, path.dirname(cfg))
-  return { ...parsed.options, noEmit: true, skipLibCheck: true }
+  return { ...parsed.options, noEmit: true, skipLibCheck: true, allowJs: true }  // generated .js files are audited too
 }
 
 async function main() {
@@ -58,8 +60,9 @@ async function main() {
   const root = path.resolve(req.projectRoot)
   const depsRoot = req.depsRoot ? path.resolve(req.depsRoot) : root
   const redirect = (p) => {
-    const local = path.join(root, 'node_modules')
-    if (depsRoot !== root && p.startsWith(local) && !fs.existsSync(local)) return path.join(depsRoot, 'node_modules') + p.slice(local.length)
+    const local = norm(path.join(root, 'node_modules'))
+    const np = norm(p)
+    if (depsRoot !== root && np.startsWith(local) && !fs.existsSync(local)) return norm(path.join(depsRoot, 'node_modules')) + np.slice(local.length)
     return p
   }
   const options = loadOptions(root)
@@ -75,12 +78,13 @@ async function main() {
   const program = ts.createProgram(files.map((f) => f.abs), options, host)
   const checker = program.getTypeChecker()
   const findings = []
+  const unreadable = []
   const seen = new Set()
   const push = (f) => { const k = `${f.file}:${f.line}:${f.kind}:${f.api}:${f.kind === 'deprecated' ? '' : f.code}`; if (!seen.has(k)) { seen.add(k); findings.push(f) } }
 
   for (const f of files) {
     const sf = program.getSourceFile(f.abs)
-    if (!sf) continue
+    if (!sf) { unreadable.push(f.rel); continue }  // reported: a file we could not load was NOT checked
     const lineOf = (pos) => sf.getLineAndCharacterOfPosition(pos).line + 1
     const onLine = (node) => !f.lines || f.lines.has(lineOf(node.getStart(sf)))
 
@@ -97,7 +101,9 @@ async function main() {
             message: `'${node.text}' is deprecated in ${pkg.name}@${pkg.version}: ${dep}`, package: pkg.name, version: pkg.version, deprecated: dep })
         }
       }
-      if ((ts.isCallExpression(node) || ts.isNewExpression(node)) && onLine(node)) {
+      const calleeName = (ts.isCallExpression(node) || ts.isNewExpression(node))
+        ? (ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression) : null
+      if (calleeName && onLine(calleeName)) {  // line of the called name: a multiline chain is one use, not two
         const sig = checker.getResolvedSignature(node)
         const decl = sig && sig.declaration
         if (decl && decl.getSourceFile && decl.getSourceFile().fileName.includes(NM)) {
@@ -106,7 +112,7 @@ async function main() {
             const callee = ts.isCallExpression(node) ? node.expression : node.expression
             const sym = checker.getSymbolAtLocation(ts.isPropertyAccessExpression(callee) ? callee.name : callee)
             const pkg = pkgOf(decl.getSourceFile().fileName) || {}
-            push({ file: f.rel, line: lineOf(node.getStart(sf)), kind: 'deprecated', code: 6387, api: sym ? qualName(checker, sym) : callee.getText(sf),
+            push({ file: f.rel, line: lineOf(calleeName.getStart(sf)), kind: 'deprecated', code: 6387, api: sym ? qualName(checker, sym) : callee.getText(sf),
               message: `this overload of '${callee.getText(sf)}' is deprecated in ${pkg.name}@${pkg.version}: ${dep}`, package: pkg.name, version: pkg.version, deprecated: dep })
           }
         }
@@ -156,7 +162,7 @@ async function main() {
       if (pkg) push({ file: f.rel, line, kind: 'error', code: d.code, api, message: `TS${d.code}: ${msg}`, package: pkg.name, version: pkg.version || null })
     }
   }
-  process.stdout.write(JSON.stringify({ findings }))
+  process.stdout.write(JSON.stringify(unreadable.length ? { findings, unreadable } : { findings }))
 }
 
-main().catch((e) => { process.stdout.write(JSON.stringify({ findings: [], error: String(e && e.message || e) })) })
+main().catch((e) => { process.stdout.write(JSON.stringify({ findings: [], internal_error: true, error: String(e && e.stack || e) })) })

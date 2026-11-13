@@ -56,7 +56,8 @@ function describeSignatures(checker, sigs, node) {
 
 async function main() {
   const req = JSON.parse(await readStdin())
-  const root = path.resolve(req.projectRoot)
+  // TypeScript hands the host normalised '/' file names (D:/x/y.ts on Windows): key in-memory files the same way
+  const root = ts.normalizePath(path.resolve(req.projectRoot))
   const mod = req.module
   const name = req.name || ''
   const member = req.member || ''
@@ -65,8 +66,8 @@ async function main() {
   const importLine = !name ? `import * as ${local} from ${JSON.stringify(mod)};`
     : isDefault ? `import ${local} from ${JSON.stringify(mod)};`
     : `import { ${name} as ${local}${/^[A-Za-z_$][\w$]*$/.test(name) ? ', ' + name : ''} } from ${JSON.stringify(mod)};`
-  const probe = path.join(root, '__vericode_probe__.ts')
-  const callFile = path.join(root, '__vericode_call__.ts')
+  const probe = ts.normalizePath(path.join(root, '__vericode_probe__.ts'))
+  const callFile = ts.normalizePath(path.join(root, '__vericode_call__.ts'))
   let callSrc = null
   if (Array.isArray(req.args)) {
     const args = req.args.join(', ')
@@ -89,16 +90,18 @@ async function main() {
   }
   const host = ts.createCompilerHost(options)
   const orig = host.getSourceFile.bind(host)
-  host.getSourceFile = (f, lang) => (files[f] !== undefined ? ts.createSourceFile(f, files[f], lang, true) : orig(f, lang))
+  const mem = (f) => files[ts.normalizePath(f)]
+  host.getSourceFile = (f, lang) => (mem(f) !== undefined ? ts.createSourceFile(f, mem(f), lang, true) : orig(f, lang))
   const fe = host.fileExists.bind(host)
-  host.fileExists = (f) => files[f] !== undefined || fe(f)
+  host.fileExists = (f) => mem(f) !== undefined || fe(f)
   const rf = host.readFile.bind(host)
-  host.readFile = (f) => (files[f] !== undefined ? files[f] : rf(f))
+  host.readFile = (f) => (mem(f) !== undefined ? mem(f) : rf(f))
   host.getCurrentDirectory = () => root
   const program = ts.createProgram(Object.keys(files), options, host)
   const checker = program.getTypeChecker()
   const sf = program.getSourceFile(probe)
-  const imp = sf.statements.find(ts.isImportDeclaration)
+  const imp = sf && sf.statements.find(ts.isImportDeclaration)
+  if (!imp) return { module: mod, name, member, internal_error: true, error: `checker could not load its probe file (${probe})` }
   const out = { module: mod, name, member, resolved: false, found: false }
   const resolution = ts.resolveModuleName(mod, probe, options, host)
   const rm = resolution.resolvedModule
@@ -195,7 +198,8 @@ async function main() {
   }
   if (callSrc) {
     const cf = prog.getSourceFile(callFile)
-    const diags = ts.getPreEmitDiagnostics(prog, cf).filter((d) => d.file && d.file.fileName === callFile)
+    if (!cf) return { ...out, internal_error: true, error: `checker could not load its call file (${callFile})` }
+    const diags = ts.getPreEmitDiagnostics(prog, cf).filter((d) => d.file && ts.normalizePath(d.file.fileName) === callFile)
     out.call_check = {
       source: callSrc.split('\n').slice(-2).join('\n').trim(),
       diagnostics: diags.map((d) => ({ code: d.code, message: ts.flattenDiagnosticMessageText(d.messageText, ' ') })),
@@ -206,4 +210,4 @@ async function main() {
   return out
 }
 
-main().then((o) => process.stdout.write(JSON.stringify(o))).catch((e) => { process.stdout.write(JSON.stringify({ error: String(e && e.stack || e) })); process.exitCode = 0 })
+main().then((o) => process.stdout.write(JSON.stringify(o))).catch((e) => { process.stdout.write(JSON.stringify({ internal_error: true, error: String(e && e.stack || e) })); process.exitCode = 0 })
