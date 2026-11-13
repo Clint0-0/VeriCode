@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 from .repo_intel import ProjectEnvironment, norm_pkg
+from .security import child_env
 from .skeleton import PlannedAPI, PlannedPackage
 
 PROBLEM = {"NOT_FOUND", "INCOMPATIBLE", "DEPRECATED"}
@@ -248,7 +249,7 @@ def audit_typescript(env: ProjectEnvironment, files: list[tuple[str, set[int] | 
     payload = {"projectRoot": env.root, "depsRoot": deps_root or env.root, "files": [{"path": p, "lines": sorted(l) if l is not None else None} for p, l in files]}
     try:
         p = subprocess.run([node, str(AUDITOR)], input=json.dumps(payload), capture_output=True, text=True, timeout=timeout,
-                           cwd=env.root, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "NODE_OPTIONS": "--max-old-space-size=1024"})
+                           cwd=env.root, env=child_env(NODE_OPTIONS="--max-old-space-size=1024"))
         rep = json.loads(p.stdout or "{}")
     except (subprocess.TimeoutExpired, ValueError, OSError) as e:
         return [{"planned_api": "(typescript audit)", "status": "UNCERTAIN", "source": "audit", "explanation": f"TypeScript audit failed: {e}"}]

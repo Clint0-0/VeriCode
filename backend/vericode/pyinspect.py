@@ -11,6 +11,7 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from .security import child_env
 
 
 @dataclass
@@ -401,7 +402,7 @@ def runtime_introspect(python_exe: Path, module: str, qualname: str, timeout: in
     try:
         p = subprocess.run(prefix + [str(python_exe), "-I", "-c", RUNTIME_SCRIPT, module, qualname],
                            capture_output=True, text=True, timeout=timeout,
-                           env={"PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
+                           env=child_env("/usr/bin:/bin", PYTHONDONTWRITEBYTECODE="1"))
         return json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {"found": False, "error": p.stderr[-300:]}
     except subprocess.TimeoutExpired:
         return {"found": False, "error": f"runtime introspection timed out after {timeout}s"}

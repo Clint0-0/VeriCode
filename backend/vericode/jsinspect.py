@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from .security import child_env
 
 
 @dataclass
@@ -190,7 +191,7 @@ def tsc_check(project_root: Path, snippet: str, timeout: int = 30) -> dict:
         return {"available": False}
     try:
         p = subprocess.run([node, "-e", TSC_SCRIPT, str(ts), snippet], cwd=str(project_root), capture_output=True,
-                           text=True, timeout=timeout, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")})
+                           text=True, timeout=timeout, env=child_env())
         return {"available": True, "diagnostics": json.loads(p.stdout or "[]")}
     except Exception as e:
         return {"available": True, "error": str(e)}
@@ -216,7 +217,7 @@ def ts_compiler_check(project_root: Path, module: str, name: str, member: str = 
         payload["args"] = [a for a in args if isinstance(a, str)][:10]
     try:
         p = subprocess.run([shutil.which("node"), str(CHECKER)], input=json.dumps(payload), capture_output=True, text=True,
-                           timeout=timeout, cwd=str(project_root), env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "NODE_OPTIONS": "--max-old-space-size=1024"})
+                           timeout=timeout, cwd=str(project_root), env=child_env(NODE_OPTIONS="--max-old-space-size=1024"))
         out = json.loads(p.stdout or "{}")
         out["available"] = True
         return out

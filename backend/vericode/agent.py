@@ -17,6 +17,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import os
+import platform
 import re
 import shutil
 import threading
@@ -29,7 +30,7 @@ from .config import ROOT, settings
 from .api_audit import audit_changes
 from .api_risk import assess
 from .repo_intel import ProjectEnvironment, conventions_text, inspect_project, select_relevant_files
-from .security import SecurityError, run_command, safe_join, sandbox_backend
+from .security import SecurityError, resolve_executable, run_command, safe_join, sandbox_backend
 from .skeleton import generate_skeleton
 from .tavily import TavilyClient
 from .verify_api import verify_skeleton
@@ -176,6 +177,14 @@ def unified_diff(orig_root: Path, new_root: Path, paths: list[str]) -> str:
     return "".join(out)
 
 
+class ExecutionSetupError(Exception):
+    """The workspace cannot run its checks (missing dependencies/executables). Carries a structured, safe detail."""
+
+    def __init__(self, detail: dict):
+        super().__init__(detail["message"])
+        self.detail = detail
+
+
 def make_sandbox(src: Path, task_id: str, link_heavy: bool = True) -> Path:
     """Disposable copy of the workspace. Dependency dirs are symlinked (process sandbox) or
     bind-mounted read-only by the container sandbox (link_heavy=False)."""
@@ -187,8 +196,20 @@ def make_sandbox(src: Path, task_id: str, link_heavy: bool = True) -> Path:
     if link_heavy:
         for heavy in (".venv", "node_modules"):
             if (src / heavy).exists():
-                os.symlink(src / heavy, dst / heavy)
+                link_dir(src / heavy, dst / heavy)
     return dst
+
+
+def link_dir(src: Path, dst: Path) -> None:
+    """Symlink a dependency dir into the sandbox copy. Windows without admin/Developer Mode refuses symlinks
+    (WinError 1314): fall back to a directory junction, which needs no privilege and is not followed by rmtree."""
+    try:
+        os.symlink(src, dst, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        import _winapi
+        _winapi.CreateJunction(str(src), str(dst))
 
 
 def cleanup_runs(max_age_s: int = 24 * 3600) -> int:
@@ -221,7 +242,8 @@ def run_checks(root: Path, env: ProjectEnvironment, backend: str = "process", pr
             r = run_command(cmd, root, backend=backend, ro_mounts=mounts)
             key = " ".join(cmd)
             entry = {"command": key, "kind": kind, "returncode": r.returncode, "passed": r.returncode == 0,
-                     "stdout": r.stdout[-6000:], "stderr": r.stderr[-3000:], "timed_out": r.timed_out, "isolation": r.isolation}
+                     "stdout": r.stdout[-6000:], "stderr": r.stderr[-3000:], "timed_out": r.timed_out, "isolation": r.isolation,
+                     "error": r.error}
             if kind == "quality":
                 before = (baseline or {}).get(key)
                 entry["required"] = bool(before) and not entry["passed"]  # regression
@@ -234,6 +256,33 @@ def run_checks(root: Path, env: ProjectEnvironment, backend: str = "process", pr
     return {"passed": bool(tests) and all(x["passed"] for x in tests) and not regressions, "results": results,
             "validated": bool(tests), "regressions": [x["command"] for x in regressions],
             "note": None if tests else "no test command detected: changes are UNVALIDATED (reported as partial, never success)"}
+
+
+def launch_error(checks: dict) -> dict | None:
+    """First structured launch error of a required check (the command never ran, so repairs cannot help)."""
+    return next((x["error"] for x in checks.get("results", []) if x.get("error") and x.get("required", True)), None)
+
+
+def readiness_error(env: ProjectEnvironment, project: Path, sandbox: Path, backend: str) -> dict | None:
+    """Before any LLM call: can the required checks run at all? Missing dependencies / executables are reported
+    as such (with a fix), instead of surfacing later as an unrelated OS error after tokens were spent."""
+    cmds = env.test_commands or []
+    if any(c and c[0] in ("npm", "npx") for c in cmds) and (project / "package.json").exists() and not (project / "node_modules").is_dir():
+        return {"category": "dependencies_not_installed", "stage": "sandbox",
+                "message": "Node dependencies are not installed in this workspace (no node_modules), so its tests cannot run.",
+                "action": f"Run `npm ci` in {project.name} (or scripts/setup_benchmark_repos.sh), then re-run the task. "
+                          "VeriCode never installs packages into your repository itself.",
+                "details": {"workspace": project.name, "commands": [" ".join(c) for c in cmds]}}
+    if backend == "process":
+        for c in cmds:
+            if c and not Path(c[0]).is_absolute() and c[0] not in ("python", "pytest") and not resolve_executable(c[0]):
+                return {"category": "executable_not_found", "stage": "sandbox",
+                        "message": f"'{c[0]}' (needed for `{' '.join(c)}`) was not found on the PATH of the VeriCode server process.",
+                        "action": "Install Node.js (it provides npm and npx), make sure its folder is on the PATH of the terminal "
+                                  "that starts VeriCode, then restart the server." if c[0] in ("npm", "npx")
+                                  else f"Install {c[0]} and put it on PATH, then restart the server.",
+                        "details": {"executable": c[0], "command": " ".join(c), "os": platform.system(), "backend": backend}}
+    return None
 
 
 def quality_baseline(root: Path, env: ProjectEnvironment, backend: str, project: Path) -> dict:
@@ -300,6 +349,9 @@ class TaskRunner:
             self.event("sandbox", f"Isolated workspace copy created (execution backend: {backend})", {"backend": backend})
             for dst_rel, src_rel in (self.seed or {}).items():  # task setup files (e.g. a seeded bug), before the run starts
                 shutil.copy2(safe_join(TASKS_DIR, src_rel), safe_join(sandbox, dst_rel))
+            ready_err = readiness_error(env, self.project, sandbox, backend)
+            if ready_err:
+                raise ExecutionSetupError(ready_err)
             qbase = quality_baseline(sandbox, env, backend, self.project) if getattr(env, "quality_commands", None) else {}
             for dst_rel, src_rel in self.acceptance.items():  # task acceptance tests (demo catalog)
                 src = safe_join(TASKS_DIR, src_rel)
@@ -377,6 +429,7 @@ class TaskRunner:
             stage = "coder"
             checks: dict = {"passed": False, "results": []}
             first_pass = None
+            launch_err = None
             audit: dict = {"findings": [], "problems": []}
             for attempt in range(self.max_repairs + 1):
                 ts = time.time()
@@ -410,6 +463,11 @@ class TaskRunner:
                                  "passed": checks["passed"], "input_tokens": r.input_tokens, "output_tokens": r.output_tokens,
                                  "audit_problems": len(audit["problems"]) if audit_on else None})
                 self.event("test", "Checks passed" if checks["passed"] else "Checks failed", {"passed": checks["passed"]})
+                launch_err = launch_error(checks)
+                if launch_err:  # the check never started: report it as such, don't spend repair tokens on it
+                    launch_err = {**launch_err, "stage": "tests"}
+                    self.event("error", launch_err["message"], {"error": launch_err})
+                    break
                 audit_blocks = audit_on and bool(audit["problems"])
                 if checks["passed"] and not audit_blocks:
                     break
@@ -445,6 +503,9 @@ class TaskRunner:
                 outcome = "partial"  # code changed but no tests exist to validate it
             else:
                 outcome = "failed"
+            if launch_err:
+                result["error"] = f"{launch_err['message']} {launch_err['action']}"
+                result["error_detail"] = launch_err
             result.update({
                 "success": checks["passed"], "outcome": outcome, "backend": backend, "execution_path": path,
                 "risk": preflight.get("risk"),
@@ -457,6 +518,10 @@ class TaskRunner:
                 "original_hashes": {p: _sha(self.project / p) for p in changed_all},
                 "original_contents": {p: _read(self.project / p) for p in changed_all},
             })
+        except ExecutionSetupError as e:
+            d = e.detail
+            result.update({"success": False, "outcome": "failed", "error": f"{d['message']} {d['action']}", "error_detail": d})
+            self.event("error", d["message"], {"error": d})
         except Exception as e:  # report, never hide
             result.update({"success": False, "outcome": "failed", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]})
             self.event("error", result["error"])

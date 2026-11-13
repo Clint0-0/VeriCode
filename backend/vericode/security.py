@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
+import platform
 import re
 try:
     import resource
@@ -24,6 +26,45 @@ MAX_REQUEST_CHARS = 60_000
 
 class SecurityError(Exception):
     pass
+
+
+log = logging.getLogger("vericode.exec")
+
+# Windows system variables a child process needs; none carries credentials. Without SYSTEMROOT node/python
+# cannot initialise sockets/crypto; without PATHEXT/COMSPEC the npm.cmd/npx.cmd wrappers cannot start.
+_WINDOWS_ENV = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA")
+# cmd.exe expands/escapes these even inside an argument list, so they are refused when a .cmd/.bat wrapper runs
+_BATCH_UNSAFE = frozenset('%^!"')
+
+
+def child_env(path: str | None = None, **extra: str) -> dict[str, str]:
+    """Minimal environment for a child process: PATH (+ Windows system variables on Windows) + `extra`."""
+    env = {"PATH": path if path is not None else os.environ.get("PATH", os.defpath)}
+    if os.name == "nt":
+        env.update({k: os.environ[k] for k in _WINDOWS_ENV if os.environ.get(k)})
+    env.update(extra)
+    return env
+
+
+def resolve_executable(name: str, path: str | None = None) -> str | None:
+    """Full path of the program that would really be launched, or None. shutil.which honours PATHEXT on Windows
+    (npm -> npm.CMD); subprocess with an argument list does not, which is what raised WinError 2."""
+    return shutil.which(name, path=path)
+
+
+_FIX_HINT = {
+    "npm": "Install Node.js (it provides npm and npx), make sure its folder is on the PATH of the terminal that starts VeriCode, then restart the server.",
+    "python": "Create the project's .venv (see README) or put Python on the PATH of the terminal that starts VeriCode, then restart the server.",
+}
+
+
+def _exec_failure(category: str, message: str, action: str, argv: list[str], resolved: str | None, cwd: Path,
+                  backend: str, returncode: int, isolation: str) -> CommandResult:
+    details = {"executable": argv[0], "resolved": resolved, "args": argv[1:], "cwd": str(cwd), "cwd_exists": cwd.is_dir(),
+               "os": platform.system(), "backend": backend}
+    log.warning("command launch failed: %s %s | %s", category, message, details)
+    error = {"category": category, "message": message, "action": action, "details": details}
+    return CommandResult(argv, returncode, "", f"{message}\n{action}", False, isolation, error)
 
 
 def workspace_root() -> Path:
@@ -112,6 +153,7 @@ class CommandResult:
     stderr: str
     timed_out: bool
     isolation: str
+    error: dict | None = None  # structured launch error (executable/workspace missing, OS refused) - never a test failure
 
 
 def _check_allowed(argv: list[str]) -> None:
@@ -232,13 +274,15 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
     backend = backend or sandbox_backend()
     if backend == "docker":
         return _run_docker(argv, cwd, timeout, ro_mounts or {})
-    env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(cwd),
-        "LANG": "C.UTF-8",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "CI": "1",
-    }
+    cwd = Path(cwd).absolute()
+    isolation = "process: rlimits+scrubbed-env+timeout"
+    if not cwd.is_dir():
+        return _exec_failure("workspace_missing", f"Sandbox workspace does not exist: {cwd}",
+                             "Re-run the task; if it repeats, check that the runs directory is writable.",
+                             argv, None, cwd, "process", 126, isolation)
+    env = child_env(os.environ.get("PATH", os.defpath), HOME=str(cwd), LANG="C.UTF-8", PYTHONDONTWRITEBYTECODE="1", CI="1")
+    if os.name == "nt":
+        env["USERPROFILE"] = str(cwd)
     venv = cwd / ".venv" / "bin"
     if not venv.is_dir() and (cwd / ".venv" / "Scripts").is_dir():
         venv = cwd / ".venv" / "Scripts"
@@ -250,13 +294,21 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
             if not exe.exists() and (venv / f"{Path(argv[0]).name}.exe").exists():
                 exe = venv / f"{Path(argv[0]).name}.exe"
             argv = [str(exe)] + argv[1:]
-    full = argv
-    isolation = "process: rlimits+scrubbed-env+timeout"
+    resolved = resolve_executable(argv[0], env["PATH"])
+    if not resolved:
+        base = "python" if Path(argv[0]).name.startswith(("python", "pytest")) else "npm" if Path(argv[0]).name in ("npm", "npx") else ""
+        return _exec_failure("executable_not_found", f"'{Path(argv[0]).name}' was not found on the PATH of the VeriCode server process",
+                             _FIX_HINT.get(base, "Install it and put it on PATH, then restart the server."),
+                             argv, None, cwd, "process", 127, isolation)
+    if os.name == "nt" and resolved.lower().endswith((".cmd", ".bat")) and any(_BATCH_UNSAFE & set(a) for a in argv[1:]):
+        raise SecurityError("characters unsafe for a Windows .cmd wrapper rejected")
+    full = [resolved] + argv[1:]
     if network_isolation_available():
-        full = [shutil.which("unshare") or "unshare", "-rn"] + argv
+        full = [shutil.which("unshare") or "unshare", "-rn"] + full
         isolation += "+no-network(unshare -rn)"
     else:
         isolation += " (network NOT restricted)"
+    log.debug("launch %s (resolved %s) args=%s cwd=%s os=%s", argv[0], resolved, argv[1:], cwd, platform.system())
     try:
         p = subprocess.run(full, cwd=str(cwd), env=env, capture_output=True, text=True,
                            timeout=timeout, preexec_fn=_limits if os.name != "nt" else None)
@@ -264,6 +316,11 @@ def run_command(argv: list[str], cwd: Path, timeout: int | None = None, backend:
     except subprocess.TimeoutExpired as e:
         out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
         return CommandResult(argv, -1, redact(out[-20000:]), f"timed out after {timeout}s", True, isolation)
+    except OSError as e:  # the OS refused to start it (permissions, bad binary, ...): structured, with traceback in the log
+        log.warning("subprocess launch raised", exc_info=True)
+        return _exec_failure("launch_failed", f"Could not start '{Path(argv[0]).name}': {type(e).__name__}: {e}",
+                             "Check that the program is installed correctly and executable, then restart the server.",
+                             argv, resolved, cwd, "process", 126, isolation)
 
 
 def _prepare_writable(cwd: Path, skip: set[str] = frozenset()) -> None:
