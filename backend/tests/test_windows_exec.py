@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import stat
-import sys
 from pathlib import Path
 
 import pytest
@@ -191,3 +190,22 @@ def test_missing_node_modules_reported_not_installed(tmp_path, monkeypatch):
     r = agent.TaskRunner(tid, proj, "x", "vericode", 1, live=False).run()
     assert r["error_detail"]["category"] == "dependencies_not_installed" and "npm ci" in r["error_detail"]["action"]
     assert r["tokens"]["total"] == 0 and not (proj / "node_modules").exists()  # never installs into the user's repo
+
+
+def test_no_deps_project_is_not_blocked(tmp_path):
+    """A package.json without dependencies legitimately has no node_modules: readiness must not block it."""
+    proj = tmp_path / "plain"
+    proj.mkdir()
+    (proj / "package.json").write_text('{"name": "plain", "scripts": {"test": "node --test"}}')
+    from vericode.repo_intel import inspect_project
+    env = inspect_project(proj)
+    assert env.test_commands == [["npm", "test"]]
+    assert agent.readiness_error(env, proj, proj, "docker") is None
+
+
+def test_benchmark_counts_setup_errors_as_blocked_not_failed():
+    from vericode import benchmark
+    r = {"success": False, "outcome": "failed", "error": "Node dependencies are not installed ...",
+         "error_detail": {"category": "dependencies_not_installed"}}
+    assert benchmark.classify(r) == "BLOCKED"
+    assert benchmark.classify({"success": False, "error": "AssertionError"}) == "FAILED"

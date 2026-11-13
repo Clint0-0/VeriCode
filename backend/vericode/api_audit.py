@@ -19,7 +19,6 @@ from __future__ import annotations
 import ast
 import difflib
 import json
-import os
 import shutil
 import subprocess
 import sys

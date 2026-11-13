@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import json
 import os
 import platform
 import re
@@ -263,11 +264,19 @@ def launch_error(checks: dict) -> dict | None:
     return next((x["error"] for x in checks.get("results", []) if x.get("error") and x.get("required", True)), None)
 
 
+def _declares_node_deps(project: Path) -> bool:
+    try:
+        pkg = json.loads((project / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(pkg.get("dependencies") or pkg.get("devDependencies"))
+
+
 def readiness_error(env: ProjectEnvironment, project: Path, sandbox: Path, backend: str) -> dict | None:
     """Before any LLM call: can the required checks run at all? Missing dependencies / executables are reported
     as such (with a fix), instead of surfacing later as an unrelated OS error after tokens were spent."""
     cmds = env.test_commands or []
-    if any(c and c[0] in ("npm", "npx") for c in cmds) and (project / "package.json").exists() and not (project / "node_modules").is_dir():
+    if any(c and c[0] in ("npm", "npx") for c in cmds) and _declares_node_deps(project) and not (project / "node_modules").is_dir():
         return {"category": "dependencies_not_installed", "stage": "sandbox",
                 "message": "Node dependencies are not installed in this workspace (no node_modules), so its tests cannot run.",
                 "action": f"Run `npm ci` in {project.name} (or scripts/setup_benchmark_repos.sh), then re-run the task. "

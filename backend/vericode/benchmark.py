@@ -15,7 +15,8 @@ baseline's run i succeeded and carry the same measurement label. Failed or block
 they are reported as success rates and failure details. Negative savings are kept.
 
 Statuses: SUCCESS (acceptance + project tests passed), FAILED (ran, did not pass), BLOCKED (provider rate limit,
-provider request-size limit, provider unavailable, or the batch's token/run budget was exhausted before the run).
+provider request-size limit, provider unavailable, the machine cannot run the checks (missing npm or node_modules), or
+the batch's token/run budget was exhausted before the run).
 """
 from __future__ import annotations
 
@@ -92,6 +93,8 @@ def classify(result: dict) -> str:
     if result.get("success"):
         return "SUCCESS"
     err = result.get("error") or ""
+    if result.get("error_detail"):  # environment cannot run the checks (missing npm/node_modules): not a coding outcome
+        return "BLOCKED"
     if any(m in err for m in BLOCK_MARKERS):
         return "BLOCKED"
     return "FAILED"

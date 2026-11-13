@@ -12,6 +12,8 @@
   before any LLM call (0 tokens); a launch error after CODER stops the run without repair attempts.
 - Dependency dirs are linked into the sandbox with a directory junction when Windows refuses symlinks
   (WinError 1314, no admin/Developer Mode).
+- Benchmark: a run whose checks cannot start (structured `error_detail`) is BLOCKED, not FAILED. Readiness does
+  not block npm projects that declare no dependencies.
 - CI: new `windows-latest` job runs real `npm test`/`npm run typecheck` through the process sandbox from a path with
   spaces and a full MOCK demo task.
 

@@ -7,7 +7,6 @@ installed, a TS-compiler-API check (node subprocess, timeout) type-checks the pl
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess

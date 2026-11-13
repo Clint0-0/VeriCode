@@ -106,7 +106,8 @@ python -m vericode.bench_cli --runs 3 --records runs.jsonl --max-tokens 150000 -
 python -m vericode.bench_cli --report-only --records runs.jsonl --out results/
 ```
 Re-running with the same `--records` skips completed runs (BLOCKED runs are retried). A batch stops starting new
-runs when the token or run budget is exhausted or when the provider blocks a run; the remaining runs are recorded
+runs when the token or run budget is exhausted, when the provider blocks a run, or when the machine cannot run the
+checks (structured `error_detail`, e.g. missing npm or `node_modules`); the remaining runs are recorded
 as BLOCKED (not run). In GitHub Actions: workflow **Benchmark (real provider)** (manual), or from a branch through
 **Live validation** with `only=benchmark` (inputs `bench_tasks`, `benchmark_runs`, `bench_configurations`,
 `bench_max_tokens`, `bench_resume_from_run`; `skip_benchmark=plan` prints the estimate only). Records, summary and
