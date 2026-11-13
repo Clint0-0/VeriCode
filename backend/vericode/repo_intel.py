@@ -346,6 +346,10 @@ def fingerprint(root: Path) -> str:
     cands = find_candidates(root, configured_interpreter(root))
     h.update(json.dumps([[c["source"], c["interpreter"], c["site_packages"]] for c in cands]).encode())
     sp = Path(cands[0]["site_packages"]) if cands and cands[0]["site_packages"] else None
+    if cands and not sp and cands[0]["source"] == "configured" and cands[0]["interpreter"]:
+        from .pyenv import probe_interpreter  # configured interpreter outside a venv layout: ask it (cached per binary)
+        pr = probe_interpreter(cands[0]["interpreter"])
+        sp = Path(pr["purelib"]) if pr.get("ok") else None
     if sp and sp.is_dir():
         for meta in sorted(sp.glob("*.dist-info")):
             h.update(meta.name.encode())
@@ -447,7 +451,7 @@ def _inspect(root: Path, fp: str) -> ProjectEnvironment:
     inst_py = installed_python(sp) if sp else {}
     nm = root / "node_modules"
     inst_node = installed_node(nm) if nm.is_dir() else {}
-    if any(e == "node" for e, _ in declared):
+    if any(e == "node" for e, _ in declared) or (root / "package.json").is_file() or nm.is_dir():
         environments["node"] = {"status": "AVAILABLE" if nm.is_dir() else "UNAVAILABLE", "source": "node_modules" if nm.is_dir() else None,
                                 "detail": "" if nm.is_dir() else "node_modules not installed (run npm ci): installed versions unknown"}
     locked = {e for e, _ in resolved}

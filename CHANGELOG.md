@@ -24,6 +24,10 @@
   for a previous task could overwrite the current task's report (`useApi`). Reports show workspace and run id.
 - Pre-Flight page: manifest / lockfile / environment / installed-inspection indicators, environment explanation,
   interpreter selection, verdict counts (planned, analyzed, verified, not found, uncertain, errors).
+- Hardening: the environment probe (which launches the workspace's own interpreter) runs without network where
+  `unshare -rn` works, with rlimits and a timeout. Node environment status is reported whenever a package.json or
+  node_modules exists; a configured interpreter outside a venv layout has its real site-packages fingerprinted
+  (installs invalidate the cached inspection); choosing an interpreter clears results computed with the old one.
 
 ## 2.4.2 — TypeScript verification on Windows (branch `fix/typescript-ast-zod-verification`)
 - **Fixed `TypeError: Cannot read properties of undefined (reading 'statements')`** in

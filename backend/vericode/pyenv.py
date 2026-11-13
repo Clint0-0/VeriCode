@@ -200,7 +200,12 @@ def probe_interpreter(interp: str, timeout: int = 10) -> dict:
     if key in _PROBE_CACHE:
         return _PROBE_CACHE[key]
     try:
-        p = subprocess.run([interp, "-I", "-c", _PROBE], capture_output=True, text=True, timeout=timeout, env=child_env())
+        from .security import _limits, network_isolation_available
+        # the interpreter belongs to the workspace (possibly an untrusted clone): no network where `unshare -rn`
+        # works, rlimits, new session, scrubbed env, timeout - same containment as runtime introspection
+        prefix = ["unshare", "-rn"] if network_isolation_available() else []
+        p = subprocess.run(prefix + [interp, "-I", "-c", _PROBE], capture_output=True, text=True, timeout=timeout, env=child_env(),
+                           cwd=os.path.dirname(interp) or None, preexec_fn=_limits if os.name != "nt" else None)
         data = json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 and p.stdout.strip() else None
         res = {"ok": True, **data} if data else {"ok": False, "error": f"exit {p.returncode}: {(p.stderr or '').strip()[-300:]}"}
     except subprocess.TimeoutExpired:

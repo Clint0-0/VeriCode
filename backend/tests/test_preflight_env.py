@@ -303,3 +303,44 @@ def test_mock_run_counts_agree_and_belong_to_the_run(sample_project, client):
     assert ev["message"] == verify_api.summary_text(pf["summary"]) and not ev["message"].startswith("Verified ")
     assert pf["task_id"] == tid and all(f["task_id"] == tid for f in pf["findings"])
     assert r["outcome"] == "succeeded" and r["diff"]  # successful coding task keeps its diff
+
+
+def test_probe_is_contained(tmp_path, monkeypatch):
+    """Inspect launches the workspace's own interpreter: no network (unshare -rn) and rlimits, like runtime checks."""
+    from vericode import security
+    seen = {}
+
+    def spy(cmd, **kw):
+        seen["cmd"], seen["preexec"] = cmd, kw.get("preexec_fn")
+        raise OSError("stop")
+    d = fake_env_dir(tmp_path / ".venv")
+    monkeypatch.setattr(security, "network_isolation_available", lambda: True)
+    monkeypatch.setattr(pyenv.subprocess, "run", spy)
+    assert not pyenv.probe_interpreter(str(pyenv.interpreter_in(d)))["ok"]
+    assert seen["cmd"][:2] == ["unshare", "-rn"] and "-I" in seen["cmd"]
+    assert (seen["preexec"] is not None) == (os.name != "nt")
+
+
+def test_node_environment_status_without_declared_deps(tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "x"}')
+    assert inspect_project(tmp_path, use_cache=False).environments["node"]["status"] == "UNAVAILABLE"
+    (tmp_path / "node_modules").mkdir()
+    assert inspect_project(tmp_path, use_cache=False).environments["node"]["status"] == "AVAILABLE"
+
+
+def test_configured_interpreter_outside_venv_layout_invalidates_cache(tmp_path, monkeypatch):
+    """A configured interpreter that is not in bin/ or Scripts/: its real site-packages (from the probe) is fingerprinted."""
+    from vericode import repo_intel
+    py = tmp_path / "tools" / "python"
+    py.parent.mkdir()
+    py.write_text("")
+    purelib = tmp_path / "its-site-packages"  # never a real interpreter's site-packages
+    purelib.mkdir()
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "requirements.txt").write_text("fakepkg==1\n")
+    monkeypatch.setattr(pyenv, "configured_interpreter", lambda root: str(py))
+    monkeypatch.setattr(pyenv, "probe_interpreter", lambda interp, timeout=10: {"ok": True, "version": "3.13", "prefix": "", "purelib": str(purelib)})
+    before = repo_intel.fingerprint(proj.resolve())
+    add_dist(purelib, "fakepkg", "1")
+    assert repo_intel.fingerprint(proj.resolve()) != before

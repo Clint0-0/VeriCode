@@ -108,7 +108,7 @@ export default function Preflight(_: { param?: string }) {
               {envData.frameworks.map((f: string) => <Badge key={f} tone="gray">{f}</Badge>)}
               <span className="text-fg-muted">checks: <span className="font-mono text-fg">{envData.test_commands.map((c: string[]) => c.join(' ')).join(', ') || 'none'}</span></span>
             </div>
-            <EnvironmentPanel key={envData.root} envData={envData} path={path} onChanged={inspect} />
+            <EnvironmentPanel key={envData.root} envData={envData} path={path} onChanged={() => { setRes(null); setManualRes(null); inspect() }} />
             {envData.warnings.filter((w: string) => !w.startsWith('Python environment')).map((w: string) => <div key={w} className="border-b border-line px-4 py-2 text-xs text-warn">{w}</div>)}
             <DataTable label="Dependencies">
               <thead><tr><th>Package</th><th>Declared</th><th>Resolved (lockfile)</th><th>Installed</th><th>Status</th></tr></thead>
