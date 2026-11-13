@@ -12,7 +12,13 @@
       "pydantic.Field": "problem",
       "pydantic.validator": "problem",
       "pydantic.BaseModel.dict": "problem"
-    }
+    },
+    "language": "python",
+    "repo_size": "small",
+    "category": "feature",
+    "api_risk": "dependency_api",
+    "expected_changes": "new module taskboard/users.py with a pydantic v2 User model, a field validator and to_public_dict()",
+    "expected_api_findings": "pydantic v1 APIs a model is likely to plan (Field(regex=), @validator, BaseModel.dict) are flagged"
   },
   {
     "id": "summary",
@@ -22,7 +28,13 @@
     "acceptance_tests": {
       "tests/test_summary.py": "summary/test_summary.py"
     },
-    "expected_findings": {}
+    "expected_findings": {},
+    "language": "python",
+    "repo_size": "small",
+    "category": "feature",
+    "api_risk": "none",
+    "expected_changes": "new TaskStore.priority_summary() method in taskboard/storage.py",
+    "expected_api_findings": "none (no third-party API involved)"
   },
   {
     "id": "signup",
@@ -37,6 +49,181 @@
       "zod:ZodString.nonempty": "problem",
       "zod:ZodString.min": "problem",
       "zod:ZodString.email": "ok"
-    }
+    },
+    "language": "typescript",
+    "repo_size": "small",
+    "category": "feature",
+    "api_risk": "dependency_api",
+    "expected_changes": "new src/signup.ts exporting a zod schema",
+    "expected_api_findings": "ZodString.nonempty (deprecated in zod 3.23.8) if planned"
+  },
+  {
+    "id": "ord_schema",
+    "title": "Checkout + business-address zod schemas (medium TS repo)",
+    "project": "ts_orders",
+    "prompt": "In src/validation.ts add CheckoutSchema and parseCheckout(input). A checkout has: email (a valid email address), shippingAddress (an Address), items (at least one entry of { sku: string matching /^[A-Z]{3}-\\d{3}$/, quantity: integer from 1 to 99 }) and an optional couponCode (4-12 uppercase letters or digits). Also export BusinessAddressSchema: AddressSchema plus a required companyName and a vatId matching /^[A-Z]{2}[0-9A-Z]{8,12}$/. parseCheckout must never throw: it returns { ok: true, data } or { ok: false, errors } where errors is a list of 'path: message' strings.",
+    "acceptance_tests": {
+      "tests/checkout.test.ts": "ord_schema/checkout.test.ts"
+    },
+    "reference": {
+      "src/validation.ts": "ord_schema/reference/src/validation.ts"
+    },
+    "language": "typescript",
+    "repo_size": "medium",
+    "category": "feature",
+    "api_risk": "dependency_api",
+    "expected_changes": "CheckoutSchema, BusinessAddressSchema and parseCheckout() in src/validation.ts",
+    "expected_api_findings": "ZodString.nonempty (deprecated) and ZodObject.augment/merge-style extension if used; .extend and safeParse are current"
+  },
+  {
+    "id": "ord_bugfix",
+    "title": "Free-shipping threshold and per-kilo rounding bug (medium TS repo, seeded)",
+    "project": "ts_orders",
+    "prompt": "Customers report that orders exactly at the free-shipping threshold are still charged shipping, and that parcels slightly over a kilogram are under-charged. Fix calculateShipping in src/shipping.ts.",
+    "seed_files": {
+      "src/shipping.ts": "ord_bugfix/seed_shipping.ts"
+    },
+    "acceptance_tests": {
+      "tests/shipping_edges.test.ts": "ord_bugfix/shipping_edges.test.ts"
+    },
+    "reference": {
+      "src/shipping.ts": "ord_bugfix/reference/src/shipping.ts"
+    },
+    "language": "typescript",
+    "repo_size": "medium",
+    "category": "bugfix",
+    "api_risk": "none",
+    "expected_changes": "two operators in calculateShipping (> to >=, floor to ceil)",
+    "expected_api_findings": "none"
+  },
+  {
+    "id": "ord_modify",
+    "title": "Discount ordering and zero floor (medium TS repo)",
+    "project": "ts_orders",
+    "prompt": "Change applyDiscounts in src/discounts.ts so that all percentage discounts are applied before any fixed-amount discount, regardless of the order in which they are given, and the result never drops below zero (keep the currency). Keep the existing exports and signature.",
+    "acceptance_tests": {
+      "tests/discounts.test.ts": "ord_modify/discounts.test.ts"
+    },
+    "reference": {
+      "src/discounts.ts": "ord_modify/reference/src/discounts.ts"
+    },
+    "language": "typescript",
+    "repo_size": "medium",
+    "category": "modification",
+    "api_risk": "none",
+    "expected_changes": "applyDiscounts body in src/discounts.ts",
+    "expected_api_findings": "none"
+  },
+  {
+    "id": "inv_restock",
+    "title": "RestockRequest model + service method (medium Python repo, pydantic 2)",
+    "project": "py_inventory",
+    "prompt": "Add a RestockRequest model to inventory/models.py with: sku (same SKU pattern as Product), quantity (integer from 1 to 10000), supplier_id, requested_at (timezone-aware datetime, defaulting to the current UTC time) and an optional note (at most 200 characters, surrounding whitespace stripped). Add RestockRequest.to_payload() returning a JSON-serialisable dict with requested_at as an ISO 8601 string. Add InventoryService.request_restock(sku, quantity, note=None) that checks the product exists and is active (raise ValueError for inactive products), uses the product's supplier and returns the RestockRequest.",
+    "acceptance_tests": {
+      "tests/test_restock.py": "inv_restock/test_restock.py"
+    },
+    "reference": {
+      "inventory/models.py": "inv_restock/reference/inventory/models.py",
+      "inventory/service.py": "inv_restock/reference/inventory/service.py"
+    },
+    "language": "python",
+    "repo_size": "medium",
+    "category": "feature",
+    "api_risk": "dependency_api",
+    "expected_changes": "RestockRequest in inventory/models.py; request_restock in inventory/service.py",
+    "expected_api_findings": "pydantic v1 APIs (Field(regex=), @validator, BaseModel.dict/.json, datetime.utcnow) fail the acceptance test (warnings are errors)"
+  },
+  {
+    "id": "inv_refactor",
+    "title": "Extract duplicated discount + VAT logic (medium Python repo)",
+    "project": "py_inventory",
+    "prompt": "In inventory/pricing.py, quote_line() and quote_order() duplicate the bulk-discount tiers and the VAT calculation. Refactor: add apply_bulk_discount_and_vat(subtotal, quantity) -> Decimal that applies the tier discount for the given quantity, then VAT, rounded to cents, and make both quote functions use it. Behaviour must not change.",
+    "acceptance_tests": {
+      "tests/test_refactor_pricing.py": "inv_refactor/test_refactor_pricing.py"
+    },
+    "reference": {
+      "inventory/pricing.py": "inv_refactor/reference/inventory/pricing.py"
+    },
+    "language": "python",
+    "repo_size": "medium",
+    "category": "refactor",
+    "api_risk": "none",
+    "expected_changes": "inventory/pricing.py only",
+    "expected_api_findings": "none"
+  },
+  {
+    "id": "inv_tests",
+    "title": "Write unit tests for the reports module (medium Python repo, mutation-checked)",
+    "project": "py_inventory",
+    "prompt": "Write tests/test_reports.py with pytest tests for inventory/reports.py: low_stock_report() (items at or below the reorder level are included, ordering by shortfall then SKU, inactive products are excluded, an empty repository gives an empty list) and stock_value() (per-supplier totals formatted with two decimals). Use the fixtures in tests/conftest.py. Do not change inventory/reports.py.",
+    "acceptance_tests": {
+      "tests/test_acceptance_reports.py": "inv_tests/test_acceptance_reports.py"
+    },
+    "reference": {
+      "tests/test_reports.py": "inv_tests/reference/tests/test_reports.py"
+    },
+    "language": "python",
+    "repo_size": "medium",
+    "category": "tests",
+    "api_risk": "test_framework",
+    "expected_changes": "new tests/test_reports.py (at least 5 tests) that pass and detect 4 seeded mutants of reports.py",
+    "expected_api_findings": "pytest API only"
+  },
+  {
+    "id": "led_fx_bugfix",
+    "title": "Historical FX rate lookup bug (large Python repo, seeded)",
+    "project": "py_ledger",
+    "prompt": "FxTable.convert uses the wrong exchange rate for dates between two rate changes (it picks the next rate instead of the one in effect) and crashes for dates after the latest rate. Fix FxTable.rate in ledger/fx.py so that a rate applies from its date until the next rate's date.",
+    "seed_files": {
+      "ledger/fx.py": "led_fx_bugfix/seed_fx.py"
+    },
+    "acceptance_tests": {
+      "tests/test_fx_history.py": "led_fx_bugfix/test_fx_history.py"
+    },
+    "reference": {
+      "ledger/fx.py": "led_fx_bugfix/reference/ledger/fx.py"
+    },
+    "language": "python",
+    "repo_size": "large",
+    "category": "bugfix",
+    "api_risk": "none",
+    "expected_changes": "the bisect lookup in FxTable.rate",
+    "expected_api_findings": "none"
+  },
+  {
+    "id": "led_export",
+    "title": "JSON export/import of journal entries (large Python repo, pydantic 2)",
+    "project": "py_ledger",
+    "prompt": "Add ledger/io/json_export.py with export_entries(entries: list[JournalEntry]) -> str returning a JSON array (dates as ISO strings, amounts as strings so Decimal values round-trip exactly) and import_entries(text: str) -> list[JournalEntry], which validates the JSON with the JournalEntry model and raises UnbalancedEntryError for any entry whose debits and credits differ.",
+    "acceptance_tests": {
+      "tests/test_json_export.py": "led_export/test_json_export.py"
+    },
+    "reference": {
+      "ledger/io/json_export.py": "led_export/reference/ledger/io/json_export.py"
+    },
+    "language": "python",
+    "repo_size": "large",
+    "category": "feature",
+    "api_risk": "dependency_api",
+    "expected_changes": "new ledger/io/json_export.py",
+    "expected_api_findings": "pydantic v1 APIs (BaseModel.json, parse_raw, parse_obj_as) fail the acceptance test (warnings are errors); TypeAdapter / model_dump(mode='json') are current"
+  },
+  {
+    "id": "led_cashflow",
+    "title": "Monthly cash-flow report (large Python repo)",
+    "project": "py_ledger",
+    "prompt": "Add ledger/reports/cash_flow.py with monthly_cash_flow(ledger, start, end) returning one dict per calendar month from start to end inclusive (months without movement included): {'month': 'YYYY-MM', 'inflow': Decimal, 'outflow': Decimal, 'net': Decimal}, computed over postings to cash accounts (Account.is_cash) in entries dated within the range. Ignore entries whose postings are all on cash accounts (transfers between cash accounts).",
+    "acceptance_tests": {
+      "tests/test_cash_flow.py": "led_cashflow/test_cash_flow.py"
+    },
+    "reference": {
+      "ledger/reports/cash_flow.py": "led_cashflow/reference/ledger/reports/cash_flow.py"
+    },
+    "language": "python",
+    "repo_size": "large",
+    "category": "feature",
+    "api_risk": "none",
+    "expected_changes": "new ledger/reports/cash_flow.py",
+    "expected_api_findings": "none"
   }
 ]

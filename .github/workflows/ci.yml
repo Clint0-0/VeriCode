@@ -42,10 +42,8 @@ jobs:
           .venv/bin/pip install -r backend/requirements.txt
       - name: Demo projects + TypeScript checker
         run: |
-          python -m venv demos/sample_project/.venv
-          demos/sample_project/.venv/bin/pip install "pydantic==2.9.2" pytest
           npm ci --prefix tools/ts-checker --no-audit --no-fund
-          npm ci --prefix demos/ts_project --no-audit --no-fund
+          scripts/setup_benchmark_repos.sh
       - name: Backend tests (process sandbox)
         run: .venv/bin/python -m pytest -q -p no:cacheprovider backend/tests -m "not e2e" -rs
       - name: Backend sandbox tests inside Docker
