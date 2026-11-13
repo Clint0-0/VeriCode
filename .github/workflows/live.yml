@@ -22,16 +22,44 @@ on:
         description: "Skip the paired benchmark inside the harness (demo 3 still runs)"
         default: "true"
         required: true
+      bench_configurations:
+        description: "only=benchmark: configurations for the benchmark workflow"
+        default: "baseline,vericode_full,vericode_adaptive"
+        required: false
+      bench_max_tokens:
+        description: "only=benchmark: stop after this many ACTUAL tokens"
+        default: "150000"
+        required: false
+      bench_resume_from_run:
+        description: "only=benchmark: earlier run id whose records to continue"
+        default: ""
+        required: false
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: live-validation
   cancel-in-progress: false
 
 jobs:
+  # only=benchmark runs the benchmark workflow (benchmark.yml) instead of the harness: lets the benchmark be
+  # dispatched from a branch through this workflow, which already exists on the default branch
+  benchmark:
+    if: inputs.only == 'benchmark'
+    uses: ./.github/workflows/benchmark.yml
+    secrets: inherit
+    with:
+      tasks: ${{ inputs.bench_tasks }}
+      configurations: ${{ inputs.bench_configurations }}
+      runs: ${{ inputs.benchmark_runs }}
+      max_tokens: ${{ inputs.bench_max_tokens }}
+      resume_from_run: ${{ inputs.bench_resume_from_run }}
+      plan_only: ${{ inputs.skip_benchmark == 'plan' }}
+
   live:
+    if: inputs.only != 'benchmark'
     name: Live tests + demos
     runs-on: ubuntu-latest
     timeout-minutes: 45

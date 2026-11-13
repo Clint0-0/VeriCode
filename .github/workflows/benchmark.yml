@@ -24,6 +24,14 @@ on:
         description: "Only print the ESTIMATED usage (no LLM calls)"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      tasks: {type: string, default: ""}
+      configurations: {type: string, default: "baseline,vericode_full,vericode_adaptive"}
+      runs: {type: string, default: "3"}
+      max_tokens: {type: string, default: "150000"}
+      resume_from_run: {type: string, default: ""}
+      plan_only: {type: boolean, default: false}
 
 permissions:
   contents: read
