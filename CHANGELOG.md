@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.4.1 — Windows process sandbox fix (branch `fix/windows-process-sandbox-winerror2`)
+- **Fixed `FileNotFoundError: [WinError 2]` right after the CODER stage on Windows.** `run_command` passed
+  `["npm", "test"]` to `subprocess.run` unresolved; Windows does not apply PATHEXT there, so `npm.cmd` was never
+  found. Executables are now resolved with `shutil.which` on the sandbox PATH and launched by full path; arguments
+  that cmd.exe would expand are refused for `.cmd`/`.bat` wrappers. Child processes get the Windows system
+  variables they need (`SYSTEMROOT`, `PATHEXT`, ...) and still no secrets.
+- Launch problems are **structured** (`executable_not_found`, `workspace_missing`, `launch_failed`,
+  `dependencies_not_installed`) with stage, message, fix and safe details, shown in the task report instead of a
+  traceback; logged server-side with the resolved path, cwd and OS. Missing npm or `node_modules` is detected
+  before any LLM call (0 tokens); a launch error after CODER stops the run without repair attempts.
+- Dependency dirs are linked into the sandbox with a directory junction when Windows refuses symlinks
+  (WinError 1314, no admin/Developer Mode).
+- CI: new `windows-latest` job runs real `npm test`/`npm run typecheck` through the process sandbox from a path with
+  spaces and a full MOCK demo task.
+
 ## 2.4.0 — adaptive execution and benchmark v2 (branch `feat/vericode-benchmark-evidence`)
 - **Adaptive execution** (`vericode` mode default): a conservative risk gate skips the planner only with positive
   evidence of no third-party API involvement; a post-generation API audit (Python AST + installed source;

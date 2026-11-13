@@ -6,7 +6,7 @@ VeriCode's scripts, test runner and Docker sandbox are built for Linux. On Windo
 | Mode | Status |
 |---|---|
 | **WSL2 Ubuntu + Docker Desktop (WSL integration)** | Supported. Same commands as on Linux |
-| Native Windows (PowerShell/cmd, no WSL) | **Not supported and not tested.** The bash scripts, the `unshare`/rlimit process sandbox and the host-toolchain Docker mode all assume Linux |
+| Native Windows (PowerShell/cmd, no WSL) | **Partial.** The process sandbox's command launch (`npm`/`npx` via `npm.cmd`, Python venvs, paths with spaces) and a full MOCK demo task are tested in CI on `windows-latest`. Limits: no network isolation for generated code (no `unshare`), no rlimits, the bash scripts don't run (use the commands in "Native Windows" below), the host-toolchain Docker mode assumes Linux |
 
 ## 1. Enable WSL2 and install Ubuntu
 In **PowerShell as Administrator**:
@@ -46,7 +46,6 @@ cd ~
 git config --global core.autocrlf input     # keep LF line endings
 git clone https://github.com/Clint0-0/VeriCode.git
 cd VeriCode
-git checkout feat/vericode-offline-hardening   # or the default branch once merged
 ```
 The repo's `.gitattributes` forces LF for `*.sh` and `*.py`. If you already cloned with CRLF on the Windows side and
 see `/usr/bin/env: 'bash\r': No such file or directory`, re-clone inside WSL or run:
@@ -91,3 +90,15 @@ VERICODE_TEST_SANDBOX=docker .venv/bin/python -m pytest -q backend/tests -k "doc
 | `unshare: unshare failed` | Some WSL kernels restrict user namespaces. The process sandbox then reports "network NOT restricted". Use Docker for isolation |
 | Very slow `npm ci` / `pip install` | The repo is on `/mnt/c`: move it into `~` |
 | Line-ending diffs in `git status` | `git config core.autocrlf input`, then `git add --renormalize .` |
+
+## Native Windows (no WSL): what you need
+The Coding Workspace runs each project's own checks (`npm test`, `npm run typecheck`, `python -m pytest`) on the
+server's PATH. In PowerShell, from the repo root:
+```powershell
+node -v; npm -v                                   # Node.js must be on PATH of the terminal that starts VeriCode
+npm ci --prefix demos/ts_orders                   # demo dependencies (VeriCode never installs into your repo itself)
+npm ci --prefix demos/ts_project
+npm ci --prefix tools/ts-checker                  # TypeScript compiler checker
+```
+If a program or the dependencies are missing, the task stops **before** any LLM call with a clear error
+(`executable_not_found` / `dependencies_not_installed`) and the fix to apply.
