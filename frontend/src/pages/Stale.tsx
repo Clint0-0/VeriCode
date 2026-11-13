@@ -95,9 +95,9 @@ export function ClaimCard({ c, corrected, open }: { c: any; corrected?: any; ope
         </div>
         <p className="mt-2 text-xs text-slate-500">Freshness: {c.freshness_note}</p>
         <p className="mt-3 text-slate-300">{c.explanation}</p>
-        {c.missing_evidence && <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200"><b>Missing evidence:</b> {c.missing_evidence}</div>}
-        {corrected?.corrected && <div className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-emerald-200"><b>Corrected claim:</b> “{corrected.corrected}” [{corrected.citation}]</div>}
-        {!corrected && c.correction && <div className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-emerald-200">Evidence-based replacement value: <b>{c.correction}</b></div>}
+        {c.missing_evidence && <div className="mt-2.5 flex items-start gap-2.5 rounded-lg border border-ink-700 bg-ink-900/90 px-3.5 py-2.5 text-xs text-slate-300 shadow-sm"><span className="text-amber-400 font-bold">ℹ</span><div><b className="font-semibold text-slate-100">Missing evidence:</b> {c.missing_evidence}</div></div>}
+        {corrected?.corrected && <div className="mt-2.5 rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-3.5 py-2.5 text-xs text-emerald-200 shadow-sm"><b>Corrected claim:</b> “{corrected.corrected}” [{corrected.citation}]</div>}
+        {!corrected && c.correction && <div className="mt-2.5 rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-3.5 py-2.5 text-xs text-emerald-200 shadow-sm">Evidence-based replacement value: <b>{c.correction}</b></div>}
         {c.confidence_breakdown && Object.keys(c.confidence_breakdown).length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
             {Object.entries(c.confidence_breakdown).map(([k, v]: any) => <span key={k} className="rounded bg-ink-800 px-1.5 py-0.5 font-mono">{k}: {String(v)}</span>)}
@@ -105,8 +105,11 @@ export function ClaimCard({ c, corrected, open }: { c: any; corrected?: any; ope
         )}
         {c.judge && <div className="mt-2 text-xs text-slate-400">LLM evidence judge: <Badge tone={c.judge.verdict === 'supports' ? 'green' : c.judge.verdict === 'contradicts' ? 'red' : 'gray'}>{c.judge.verdict}</Badge>{c.judge.discarded ? ' (discarded: ' + c.judge.reason + ')' : ''}{c.judge.missing_context ? ` · missing: ${c.judge.missing_context}` : ''}</div>}
         {c.conflict && (
-          <div className="mt-3 rounded border border-amber-500/30 p-3">
-            <div className="text-xs font-medium text-amber-200">Conflicting evidence — {c.conflict.reason}</div>
+          <div className="mt-3 rounded-lg border border-ink-700 bg-ink-900/90 p-3.5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-200">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              Conflicting evidence — {c.conflict.reason}
+            </div>
             <div className="mt-2 grid gap-3 md:grid-cols-2">
               {(['supporting', 'contradicting'] as const).map((side) => (
                 <div key={side}>

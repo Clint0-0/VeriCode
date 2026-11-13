@@ -6,7 +6,7 @@ function Row({ name, ok, value, missing }: { name: string; ok: boolean | null; v
       <span className="text-sm text-slate-300">{name}</span>
       <span className="flex flex-wrap items-center gap-2">
         <Badge tone={ok === null ? 'gray' : ok ? 'green' : 'amber'}>{value}</Badge>
-        {missing && missing.length > 0 && <span className="font-mono text-[11px] text-amber-300">missing: {missing.join(', ')}</span>}
+        {missing && missing.length > 0 && <span className="rounded border border-ink-700/80 bg-ink-950 px-2 py-0.5 font-mono text-[11px] text-slate-400">missing: {missing.join(', ')}</span>}
       </span>
     </div>
   )
