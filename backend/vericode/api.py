@@ -1,6 +1,7 @@
 """FastAPI application - REST API contracts for every VeriCode module."""
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -444,6 +445,24 @@ def start_benchmark(req: BenchReq):
             _bench_state["running"] = False
     threading.Thread(target=go, daemon=True).start()
     return {"started": True}
+
+
+PUBLISHED_DIR = ROOT / "docs" / "submission" / "benchmark-results"
+
+
+@app.get("/api/benchmarks/published")
+def published_benchmarks():
+    """Benchmark summaries committed to the repository (docs/submission/benchmark-results/<date>/summary.json),
+    each traceable to the CI run that produced it. Read-only, fixed directory."""
+    out = []
+    for f in sorted(PUBLISHED_DIR.glob("*/summary.json"), reverse=True):
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        out.append({"name": f.parent.name, **{k: d.get(k) for k in ("created_at", "provider", "coder_model", "planner_model", "runs_per_mode",
+                                                                     "repair_budget", "measurement_labels", "stopped", "summary", "source_runs")}})
+    return {"results": out}
 
 
 @app.get("/api/benchmarks")

@@ -256,3 +256,16 @@ def test_blocked_run_stops_the_batch(tmp_path, sample_project, monkeypatch):
     statuses = [r["status"] for r in res["records"]]
     assert statuses == ["BLOCKED"] * 4
     assert sum(1 for r in res["records"] if r.get("not_run")) == 3 and "provider blocked" in res["stopped"]
+
+
+def test_published_results_endpoint(client, tmp_path, monkeypatch):
+    from vericode import api
+    d = tmp_path / "2026-11-13"
+    d.mkdir()
+    (d / "summary.json").write_text(json.dumps({"provider": "openai", "measurement_labels": ["ACTUAL_PROVIDER_USAGE"],
+                                                "summary": {"tasks": [], "overall": {}}, "source_runs": [123]}))
+    (tmp_path / "broken").mkdir()
+    (tmp_path / "broken" / "summary.json").write_text("{not json")
+    monkeypatch.setattr(api, "PUBLISHED_DIR", tmp_path)
+    r = client.get("/api/benchmarks/published").json()["results"]
+    assert [x["name"] for x in r] == ["2026-11-13"] and r[0]["source_runs"] == [123]

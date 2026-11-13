@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, fmt, MEASUREMENT_TONE } from '../api'
+import BenchmarkAnalytics from '../components/BenchmarkAnalytics'
 import { Badge, Button, Card, Empty, ErrorBox, Notice, Select, Spinner, Stat, useApi } from '../components/ui'
 
 function Bars({ base, veri }: { base: number; veri: number }) {
@@ -20,6 +21,8 @@ function Bars({ base, veri }: { base: number; veri: number }) {
 export default function Tokens(_: { param?: string }) {
   const a = useApi<any>('/analytics/tokens', 10000)
   const b = useApi<any>('/benchmarks', 3000)
+  const pub = useApi<any>('/benchmarks/published')
+  const [source, setSource] = useState('')
   const [err, setErr] = useState<unknown>(null)
   const [runs, setRuns] = useState(1)
   const [kind, setKind] = useState<'ACTUAL_PROVIDER_USAGE' | 'MOCK_OR_ESTIMATED'>('ACTUAL_PROVIDER_USAGE')
@@ -80,6 +83,27 @@ export default function Tokens(_: { param?: string }) {
           </table>
         </Card>
       )}
+
+      {(() => {
+        const sources = [
+          ...(pub.data?.results ?? []).map((r: any) => ({ key: `pub:${r.name}`, label: `Published: ${r.name}`, summary: r.summary, labels: r.measurement_labels ?? [], meta: r })),
+          ...(b.data?.results ?? []).filter((r: any) => r.summary?.tasks).map((r: any) => ({ key: `local:${r.id}`, label: `Local run ${r.id} (${fmt.time(r.created_at)})`, summary: r.summary, labels: r.measurement_labels ?? [r.measurement], meta: r })),
+        ]
+        const cur = sources.find((x) => x.key === source) ?? sources[0]
+        return (
+          <Card title="Benchmark analytics (configurations, stages, paths)" actions={sources.length > 1 ? (
+            <Select size="sm" aria-label="Benchmark source" className="w-72" value={cur?.key ?? ''} onChange={(e) => setSource(e.target.value)}>
+              {sources.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+            </Select>) : undefined}>
+            {!cur ? <Empty>No benchmark with configuration results yet. Published results live in docs/submission/benchmark-results/.</Empty> : (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">{cur.meta.provider ?? '—'}{cur.meta.coder_model ? ` / ${cur.meta.coder_model}` : ''} · {cur.meta.runs_per_mode} repetition(s) per configuration{cur.meta.source_runs?.length ? ` · CI runs ${cur.meta.source_runs.join(', ')}` : ''}{cur.meta.stopped ? ` · stopped early: ${cur.meta.stopped}` : ''}</div>
+                <BenchmarkAnalytics summary={cur.summary} labels={cur.labels} />
+              </div>
+            )}
+          </Card>
+        )
+      })()}
 
       <Card title="Benchmark: baseline vs VeriCode (identical tasks, model, repo state, tests, repair budget)" actions={<>
         <Select size="sm" aria-label="Measurement" className="w-52" value={kind} onChange={(e) => setKind(e.target.value as any)}>
