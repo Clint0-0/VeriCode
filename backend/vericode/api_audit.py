@@ -143,6 +143,9 @@ class _PyUsage(ast.NodeVisitor):
             r = self._resolve(parts) if parts else None
             if r:
                 self.subclass[node.name] = r
+                if r[1] and len(parts) == 1:  # `class T(BS)` with BS imported (possibly aliased): a use of the class
+                    self._use(r[0], r[1], "class", [], b.lineno)
+                    self.usages[-1]["base"] = True  # reported only when problematic (see audit_python)
         self._class.append(node.name)
         self.generic_visit(node)
         self._class.pop()
@@ -235,6 +238,8 @@ def audit_python(env: ProjectEnvironment, path: str, text: str, lines: set[int] 
             f = verify_planned_api(env, pkg, pkg.planned_apis[0]).to_dict()
         except Exception as e:  # never let the audit crash a run
             f = {"planned_api": f"{u['module']}.{u['name']}", "status": "UNCERTAIN", "explanation": f"audit error: {e}"}
+        if u.get("base") and f.get("status") in ("VERIFIED_LOCAL", "VERIFIED_LIVE", "UNCERTAIN"):
+            continue  # a plain, valid base class is not noise-worthy; a removed/moved/deprecated one is reported
         if u.get("member") and f.get("status") in ("NOT_FOUND", "UNCERTAIN"):
             continue  # dynamic member (field, instance attribute, mixin): not evidence of a wrong API
         f.update({"file": path, "line": u["line"], "source": "audit"})

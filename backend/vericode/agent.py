@@ -34,7 +34,7 @@ from .repo_intel import ProjectEnvironment, conventions_text, inspect_project, s
 from .security import SecurityError, resolve_executable, run_command, safe_join, sandbox_backend
 from .skeleton import generate_skeleton
 from .tavily import TavilyClient
-from .verify_api import verify_skeleton
+from .verify_api import summarize as summarize_findings, summary_text, verify_skeleton
 
 RUNS_DIR = ROOT / "demos" / "_runs"
 TASKS_DIR = ROOT / "demos" / "tasks"
@@ -240,7 +240,7 @@ def run_checks(root: Path, env: ProjectEnvironment, backend: str = "process", pr
     mounts = heavy_mounts(project) if project else {}
     for kind, cmds in (("test", env.test_commands or []), ("quality", getattr(env, "quality_commands", []) or [])):
         for cmd in cmds:
-            r = run_command(cmd, root, backend=backend, ro_mounts=mounts)
+            r = run_command(project_cmd(cmd, env, backend), root, backend=backend, ro_mounts=mounts)
             key = " ".join(cmd)
             entry = {"command": key, "kind": kind, "returncode": r.returncode, "passed": r.returncode == 0,
                      "stdout": r.stdout[-6000:], "stderr": r.stderr[-3000:], "timed_out": r.timed_out, "isolation": r.isolation,
@@ -257,6 +257,17 @@ def run_checks(root: Path, env: ProjectEnvironment, backend: str = "process", pr
     return {"passed": bool(tests) and all(x["passed"] for x in tests) and not regressions, "results": results,
             "validated": bool(tests), "regressions": [x["command"] for x in regressions],
             "note": None if tests else "no test command detected: changes are UNVALIDATED (reported as partial, never success)"}
+
+
+def project_cmd(cmd: list[str], env: ProjectEnvironment, backend: str) -> list[str]:
+    """`python ...` runs with the workspace's discovered interpreter when that is not an in-project .venv (which the
+    sandbox already provides): venv/, env/, Poetry, Pipenv, Conda or a configured interpreter. Process sandbox only:
+    the container sees only the workspace copy."""
+    pe = (env.environments or {}).get("python") or {}
+    if (backend == "process" and cmd and cmd[0] == "python" and pe.get("interpreter")
+            and pe.get("status") in ("AVAILABLE", "AMBIGUOUS") and pe.get("source") != "in-project (.venv)"):
+        return [pe["interpreter"]] + cmd[1:]
+    return cmd
 
 
 def launch_error(checks: dict) -> dict | None:
@@ -297,7 +308,7 @@ def readiness_error(env: ProjectEnvironment, project: Path, sandbox: Path, backe
 def quality_baseline(root: Path, env: ProjectEnvironment, backend: str, project: Path) -> dict:
     out = {}
     for cmd in getattr(env, "quality_commands", []) or []:
-        r = run_command(cmd, root, backend=backend, ro_mounts=heavy_mounts(project))
+        r = run_command(project_cmd(cmd, env, backend), root, backend=backend, ro_mounts=heavy_mounts(project))
         out[" ".join(cmd)] = r.returncode == 0
     return out
 
@@ -397,16 +408,19 @@ class TaskRunner:
                     self.event("skeleton", f"API skeleton: {sum(len(p.planned_apis) for p in sk.packages)} planned APIs",
                                {"skeleton": sk.model_dump(), "validation_errors": sk_errors})
                     ts = time.time()
-                    findings = [f.to_dict() for f in verify_skeleton(env, sk, self.tavily, live=self.live, task=self.prompt)]
+                    findings = [{**f.to_dict(), "task_id": self.task_id} for f in verify_skeleton(env, sk, self.tavily, live=self.live, task=self.prompt)]
                     self._timed("verify", ts)
                     rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
-                    self.event("verify", f"Verified {len(findings)} APIs", {"statuses": [f["status"] for f in findings]})
+                    vsum = summarize_findings(findings)
+                    self.event("verify", summary_text(vsum), {"statuses": [f["status"] for f in findings], "summary": vsum})
                     briefing = build_briefing(findings)
                     preflight = {"selected_files": selected, "skeleton": sk.model_dump(), "skeleton_errors": sk_errors,
                                  "findings": findings, "briefing": briefing, "rules_saved": [r["id"] for r in rules],
                                  "rules_invalidated": invalidated, "tavily_calls": self.tavily.calls,
                                  "tavily_configured": bool(self.tavily_api_key_set()),
-                                 "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings}}
+                                 "summary": vsum, "task_id": self.task_id,
+                                 "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings,
+                                                 "environments": env.environments}}
                     if plan == "vericode_full":  # original prompt, unchanged (keeps historical comparability)
                         user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED DEPENDENCIES:\n{deps_summary(env)}\n\n"
                                 f"PROJECT CONVENTIONS:\n{conv}\n\n"

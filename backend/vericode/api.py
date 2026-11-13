@@ -21,7 +21,7 @@ from .repo_intel import inspect_project, select_relevant_files
 from .security import SecurityError, network_isolation_available, resolve_workspace
 from .skeleton import PlannedAPI, PlannedPackage, generate_skeleton
 from .tavily import TavilyClient
-from .verify_api import verify_planned_api, verify_skeleton
+from .verify_api import summarize as summarize_findings, verify_planned_api, verify_skeleton
 
 MAX_BODY = 256_000
 
@@ -220,6 +220,23 @@ def inspect(req: PathReq):
     return env.to_dict()
 
 
+class InterpreterReq(BaseModel):
+    path: str
+    interpreter: str | None = None  # absolute path to python / python.exe; empty clears the choice
+
+
+@app.post("/api/projects/python-interpreter")
+def set_python_interpreter(req: InterpreterReq):
+    """Explicitly choose the Python interpreter of a workspace (validated: must exist and run). Nothing is installed."""
+    from .pyenv import set_configured_interpreter
+    root = resolve_workspace(req.path)
+    try:
+        out = set_configured_interpreter(root, (req.interpreter or "").strip() or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return {**out, "environments": inspect_project(root).environments}
+
+
 @app.post("/api/projects/select-files")
 def select_files(req: SelectReq):
     env = inspect_project(resolve_workspace(req.path))
@@ -236,7 +253,7 @@ def preflight(req: PreflightReq):
         sel = select_relevant_files(env, req.task)
         sk, errs = generate_skeleton(req.task, agent.deps_summary(env), agent.outline(env, [s["path"] for s in sel]), tid, ledger)
         client = TavilyClient()
-        findings = [f.to_dict() for f in verify_skeleton(env, sk, client, live=req.live, task=req.task)]
+        findings = [{**f.to_dict(), "task_id": tid} for f in verify_skeleton(env, sk, client, live=req.live, task=req.task)]
     except Exception as e:  # mark the task failed instead of leaving it queued forever, then report the error
         with db.tx() as c:
             c.execute("UPDATE tasks SET status='failed', outcome='failed', finished_at=?, success=0, result_json=? WHERE id=?",
@@ -246,7 +263,8 @@ def preflight(req: PreflightReq):
     rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
     res = {"selected_files": sel, "skeleton": sk.model_dump(), "skeleton_errors": errs, "findings": findings,
            "briefing": agent.build_briefing(findings), "tokens": agent.summarize_ledger(ledger),
-           "tavily_calls": client.calls, "tavily_configured": bool(client.api_key), "rules_saved": [r["id"] for r in rules]}
+           "tavily_calls": client.calls, "tavily_configured": bool(client.api_key), "rules_saved": [r["id"] for r in rules],
+           "summary": summarize_findings(findings), "task_id": tid, "workspace": root.name, "environments": env.environments}
     with db.tx() as c:
         c.execute("UPDATE tasks SET status='succeeded', finished_at=?, success=1, preflight_json=?, result_json=? WHERE id=?",
                   (time.time(), db.dumps(res), db.dumps({"tokens": res["tokens"], "mode": "preflight"}), tid))

@@ -20,7 +20,7 @@ from .tavily import TavilyClient, domain_of
 RISK_WEIGHTS = {
     "not_found": 60, "rejected_argument": 50, "unsupported_argument": 40, "deprecated": 30,
     "package_missing": 60, "assumed_major_mismatch": 20, "uncertain_argument": 8,
-    "unverifiable": 25, "live_conflict": 15, "verification_error": 25,
+    "unverifiable": 25, "live_conflict": 15, "verification_error": 25, "moved_export": 10,
 }
 
 
@@ -46,9 +46,17 @@ class APIFinding:
     argument_checks: list[dict] = field(default_factory=list)
     live: dict | None = None
     memory_rule: dict | None = None
+    environment_status: str | None = None  # AVAILABLE | UNAVAILABLE | AMBIGUOUS | CONFIGURATION_ERROR
+    declared_version: str | None = None
+    resolved_version: str | None = None   # lockfile, when one exists
+    task_id: str | None = None
+
+    @property
+    def verdict(self) -> str:
+        return verdict_of(self.status)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {**asdict(self), "verdict": self.verdict}
 
     def add_risk(self, factor: str, detail: str) -> None:
         w = RISK_WEIGHTS[factor]
@@ -101,12 +109,26 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
     rule = memory.find_rule(pkg.package, installed, api.name)
     if rule:
         f.memory_rule = rule
+    f.environment_status = env.env_status(pkg.ecosystem)
+    if dep is not None:
+        f.resolved_version = dep.resolved
+        f.declared_version = dep.declared
     if dep is None or not installed:
+        f.verification_method.append("manifest+installed-metadata")
+        if f.environment_status not in ("AVAILABLE", "AMBIGUOUS"):
+            # no usable environment: an absent package is unknown, not missing; its APIs are not checked
+            f.status, f.api_compatibility = "UNCERTAIN", "unknown"
+            f.add_risk("unverifiable", f"{pkg.ecosystem} environment {f.environment_status}")
+            detail = (env.environments.get(pkg.ecosystem) or {}).get("detail") or ""
+            f.explanation = (f"{'Python' if pkg.ecosystem == 'python' else 'Node'} environment {f.environment_status.lower()}: "
+                             f"installed version of {pkg.package} is unknown"
+                             + (f" (declared {dep.declared})" if dep and dep.declared else " (not declared)")
+                             + f", so this API was NOT checked. {detail}").strip()
+            return f
         f.status, f.api_compatibility = "NOT_FOUND", "incompatible"
-        why = "not declared or installed in the project" if dep is None else f"declared ({dep.declared}) but not installed ({dep.status})"
+        why = "not declared or installed in the project" if dep is None else f"declared ({dep.declared}) but not installed in the project environment"
         f.add_risk("package_missing", f"package {pkg.package} {why}")
         f.explanation = f"Package {pkg.package} is {why}."
-        f.verification_method.append("manifest+installed-metadata")
         return f
 
     am, im = _major(pkg.assumed_version), _major(installed)
@@ -134,7 +156,9 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
                     info = alt
                     break
         if not info.found and not info.migration_hint:
-            py = venv_tool(Path(env.root), "python")  # .venv/bin/python or .venv\\Scripts\\python.exe
+            pe = env.environments.get("python") or {}
+            py = (Path(pe["interpreter"]) if pe.get("interpreter") and pe.get("status") in ("AVAILABLE", "AMBIGUOUS")
+                  else venv_tool(Path(env.root), "python"))  # the workspace's own interpreter, never VeriCode's
             if py:
                 rt = runtime_introspect(py, api.import_path, api.name)
                 f.verification_method.append("runtime_isolated(subprocess -I, timeout)")
@@ -167,6 +191,7 @@ def verify_planned_api(env: ProjectEnvironment, pkg: PlannedPackage, api: Planne
             f.explanation = f"`{api.name}` does not exist in installed {pkg.package} {installed}. " + (info.note or "")
             if info.migration_hint:
                 f.suggested_correction = info.migration_hint
+                _companion_package(env, api, f, info.migration_hint)
         return _apply_rule(f)
 
     f.argument_checks = check_arguments(info, api.arguments) if pkg.ecosystem == "python" else _js_args(info, api.arguments)
@@ -300,6 +325,65 @@ def _js_args(info, args: list[str]) -> list[dict]:
             out.append({"argument": a, "status": "uncertain" if has_rest or len(info.params) else "unsupported",
                         "detail": "positional/object argument names are not checked by name in TS declarations"})
     return out
+
+
+VERDICT = {"VERIFIED_LOCAL": "VERIFIED", "VERIFIED_LIVE": "VERIFIED", "STALE": "VERIFIED", "DEPRECATED": "VERIFIED",
+           "INCOMPATIBLE": "VERIFIED", "NOT_FOUND": "NOT_FOUND", "ERROR": "ERROR"}
+
+
+def verdict_of(status: str) -> str:
+    """Existence verdict shared by every view: does the API exist in the INSTALLED package? VERIFIED (it exists;
+    `status` adds deprecated/incompatible/stale detail), NOT_FOUND (checked and absent), UNCERTAIN (not enough
+    evidence, e.g. no environment) or ERROR (the verification tool failed)."""
+    return VERDICT.get(status, "UNCERTAIN")
+
+
+def summarize(findings: list[dict]) -> dict:
+    """The one count used by the run log, the Pre-Flight page and the task report: analyzed != verified."""
+    out = {"planned": len(findings), "analyzed": sum(1 for f in findings if f.get("status") not in (None, "NOT_CHECKED")),
+           "verified": 0, "not_found": 0, "uncertain": 0, "error": 0,
+           "problems": sum(1 for f in findings if f.get("status") in ("NOT_FOUND", "INCOMPATIBLE", "DEPRECATED")),
+           "by_status": {}}
+    for f in findings:
+        st = f.get("status") or "NOT_CHECKED"
+        out["by_status"][st] = out["by_status"].get(st, 0) + 1
+        out[verdict_of(st).lower()] += 1
+    return out
+
+
+def summary_text(s: dict) -> str:
+    return (f"Analyzed {s['analyzed']} of {s['planned']} planned APIs: {s['verified']} verified, {s['not_found']} not found, "
+            f"{s['uncertain']} uncertain, {s['error']} verification errors")
+
+
+_MOVED = re.compile(r"moved to (?:the )?`?([A-Za-z0-9][A-Za-z0-9_.\-]*)`? package", re.I)
+
+
+def _companion_package(env: ProjectEnvironment, api: PlannedAPI, f: APIFinding, hint: str) -> None:
+    """An export moved to a separate package (pydantic v2: BaseSettings -> pydantic-settings). Check whether that
+    package is declared and installed and whether the export really exists there, instead of assuming it."""
+    m = _MOVED.search(hint)
+    if not m:
+        return
+    comp = m.group(1)
+    module = comp.replace("-", "_")
+    top = api.name.split(".")[0]
+    cdep = env.dep(comp)
+    f.add_risk("moved_export", f"`{top}` moved to the {comp} package")
+    if cdep and cdep.installed and env.python_site_packages:
+        info = PyResolver(Path(env.python_site_packages)).resolve(module, top)
+        if info.found:
+            f.suggested_correction = (f"from {module} import {top}  (verified in installed {comp} {cdep.installed}"
+                                      f"{', declared ' + cdep.declared if cdep.declared else ', NOT declared in the manifest: add it'})")
+        else:
+            f.suggested_correction = f"{comp} {cdep.installed} is installed but has no `{top}`: check its version. {hint}"
+    elif cdep and cdep.declared:
+        f.suggested_correction = (f"from {module} import {top}  ({comp} is declared ({cdep.declared}) but not installed "
+                                  f"in the project environment: install it, then re-verify)")
+    else:
+        f.suggested_correction = (f"from {module} import {top}  (requires the separate {comp} package, which is NOT declared "
+                                  f"or installed in this project: add {comp} to the dependencies). {hint}")
+    f.explanation += f" `{top}` moved to the separate {comp} package."
 
 
 def _apply_rule(f: APIFinding) -> APIFinding:
