@@ -1,9 +1,39 @@
 import { useState } from 'react'
-import { CheckCircle2, Circle, CircleX, FileCode2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Circle, CircleAlert, CircleX, FileCode2, Loader2 } from 'lucide-react'
 import { api, fmt } from '../api'
 import { FindingsList, KV } from './Findings'
 import { ConfidenceHeatmap, CorrectionsList } from './Heatmap'
 import { Badge, Button, Card, Diff, Empty, ErrorBox, Mono, Notice } from './ui'
+
+const ERROR_TITLE: Record<string, string> = {
+  executable_not_found: 'Required program not found',
+  dependencies_not_installed: 'Dependencies not installed',
+  workspace_missing: 'Sandbox workspace missing',
+  launch_failed: 'Command could not start',
+}
+
+/** Structured execution error from the backend: what failed, where, and how to fix it (no raw traceback). */
+export function ExecutionError({ detail }: { detail: any }) {
+  const details = Object.entries(detail.details ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== '')
+  return (
+    <div role="alert" className="rounded-md border border-err/25 bg-err-soft px-3 py-2.5 text-[13px] text-err">
+      <div className="flex items-start gap-2">
+        <CircleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 space-y-1 break-words">
+          <div className="font-semibold">{ERROR_TITLE[detail.category] ?? 'Execution error'}{detail.stage && <span className="font-normal"> · stage {detail.stage}</span>}</div>
+          <div>{detail.message}</div>
+          {detail.action && <div className="text-fg"><b className="font-medium">Fix:</b> {detail.action}</div>}
+          {details.length > 0 && (
+            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-0.5 pt-1 font-mono text-[11px] text-fg-muted">
+              {details.map(([k, v]) => <div key={k} className="contents"><dt>{k}</dt><dd className="break-all">{Array.isArray(v) ? v.join(' ') : String(v)}</dd></div>)}
+            </dl>
+          )}
+          <div className="font-mono text-[11px] text-fg-subtle">{detail.category}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function TokenTable({ tokens }: { tokens: any }) {
   if (!tokens) return <Empty>No token usage recorded.</Empty>
@@ -81,7 +111,7 @@ export function TaskReport({ task, onApplied }: { task: any; onApplied?: () => v
       </div>
       {task.provider === 'mock' && <Notice>Scripted mock provider: responses are canned for demo tasks and token counts are estimated (MOCK).</Notice>}
       {res.outcome === 'partial' && <Notice>Partial: code was changed but the project has no tests, so the change is unvalidated. It is not counted as a success.</Notice>}
-      {res.error && <ErrorBox error={{ message: res.error }} />}
+      {res.error_detail ? <ExecutionError detail={res.error_detail} /> : res.error && <ErrorBox error={{ message: res.error }} />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
