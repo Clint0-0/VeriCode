@@ -65,6 +65,8 @@ class Settings:
     tavily_timeout: float = field(default_factory=lambda: float(_env("TAVILY_TIMEOUT", "20")))
     tavily_max_retries: int = field(default_factory=lambda: int(_env("TAVILY_MAX_RETRIES", "2")))
     max_repair_attempts: int = field(default_factory=lambda: int(_env("VERICODE_MAX_REPAIRS", "3")))
+    # "vericode" mode: adaptive (risk gate + post-generation API audit) when on, original full pre-flight when off
+    adaptive_execution: bool = field(default_factory=lambda: _env("VERICODE_ADAPTIVE", "1") == "1")
     command_timeout: int = field(default_factory=lambda: int(_env("VERICODE_COMMAND_TIMEOUT", "120")))
     cache_ttl_seconds: int = field(default_factory=lambda: int(_env("VERICODE_CACHE_TTL", "86400")))
     demo_mode: bool = field(default_factory=lambda: _env("VERICODE_DEMO_MODE", "1") == "1")
@@ -135,6 +137,7 @@ class Settings:
             "openai_configured": bool(self.openai_api_key),
             "workspaces_root": self.workspaces_root,
             "max_repair_attempts": self.max_repair_attempts,
+            "adaptive_execution": self.adaptive_execution,
             "command_timeout": self.command_timeout,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "tavily_timeout": self.tavily_timeout,
@@ -162,7 +165,7 @@ class Settings:
         "cache_ttl_seconds": int, "tavily_timeout": float, "tavily_max_retries": int,
         "cost_input_per_mtok": float, "cost_output_per_mtok": float, "llm_provider": str,
         "sandbox_backend": str, "use_llm_judge": bool, "live_search_default": bool, "tavily_search_depth": str,
-        "default_workspace": str, "llm_stream": bool,
+        "default_workspace": str, "llm_stream": bool, "adaptive_execution": bool,
     }
 
     def load_persisted(self) -> None:

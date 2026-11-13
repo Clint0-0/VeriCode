@@ -244,6 +244,6 @@ def test_runs_benchmarks_rules_evidence_survive_restart(sample_project, tmp_path
     db._conn = None
     db.init_db()
     assert db.row("SELECT id FROM benchmarks WHERE id=?", (res["id"],))
-    assert db.row("SELECT COUNT(*) n FROM tasks WHERE benchmark_id=?", (res["id"],))["n"] == 2
+    assert db.row("SELECT COUNT(*) n FROM tasks WHERE benchmark_id=?", (res["id"],))["n"] == len(benchmark.DEFAULT_CONFIGURATIONS)
     assert stale.load_analysis(a["id"])["claims"]
     assert db.row("SELECT COUNT(*) n FROM sessions")["n"] >= 0

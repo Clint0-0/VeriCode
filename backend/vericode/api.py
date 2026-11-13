@@ -123,7 +123,7 @@ class VerifyApiReq(PathReq):
 class TaskReq(BaseModel):
     path: str | None = None
     prompt: str | None = Field(default=None, max_length=8000)
-    mode: Literal["vericode", "baseline"] = "vericode"
+    mode: Literal["vericode", "baseline", "vericode_full", "vericode_adaptive", "context_only"] = "vericode"
     max_repairs: int | None = Field(default=None, ge=0, le=5)
     live: bool = True
     catalog_id: str | None = None
@@ -144,6 +144,8 @@ class BenchReq(BaseModel):
     runs: int = Field(default=1, ge=1, le=5)
     max_repairs: int | None = Field(default=None, ge=0, le=5)
     live: bool = True
+    configurations: list[Literal["baseline", "vericode_full", "vericode_adaptive", "context_only"]] = []
+    max_total_tokens: int | None = Field(default=None, ge=1000)
 
 
 class RuleUpdate(BaseModel):
@@ -274,20 +276,21 @@ def catalog():
 
 @app.post("/api/tasks")
 def create_task(req: TaskReq):
-    acceptance = None
+    acceptance = seed = None
     path, prompt = req.path, req.prompt
     if req.catalog_id:
         t = next((x for x in agent.load_catalog() if x["id"] == req.catalog_id), None)
         if not t:
             raise HTTPException(404, "unknown catalog task")
         path, prompt, acceptance = path or t["project"], prompt or t["prompt"], t.get("acceptance_tests")
+        seed = t.get("seed_files")
     if not path or not prompt:
         raise HTTPException(400, "path and prompt are required (or a catalog_id)")
     root = resolve_workspace(path)
     ps = llm.provider_status()
     if not ps["ready"]:
         raise llm.LLMUnavailable(f"LLM provider '{ps['provider']}' not ready; missing: {', '.join(ps['missing'])}")
-    tid = agent.run_task_async(root, prompt, req.mode, req.max_repairs, req.live, acceptance)
+    tid = agent.run_task_async(root, prompt, req.mode, req.max_repairs, req.live, acceptance, seed)
     return {"task_id": tid}
 
 
@@ -433,7 +436,8 @@ def start_benchmark(req: BenchReq):
 
     def go():
         try:
-            benchmark.run_benchmark(req.task_ids or None, req.runs, req.max_repairs, req.live)
+            benchmark.run_benchmark(req.task_ids or None, req.runs, req.max_repairs, req.live,
+                                    configurations=req.configurations or None, max_total_tokens=req.max_total_tokens)
         except Exception as e:  # surfaced via GET
             _bench_state["error"] = str(e)
         finally:

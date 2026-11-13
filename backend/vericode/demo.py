@@ -70,8 +70,13 @@ def demo2(live: bool) -> None:
     return res
 
 
+DEMO3_TASKS = ["users", "summary", "signup"]  # the original demo tasks; the full catalog runs via vericode.bench_cli
+
+
 def demo3(runs: int) -> None:
-    res = run_benchmark(runs=runs)
+    from .config import settings
+    mock = settings.effective_provider() == "mock"  # the scripted mock only knows the original demo tasks
+    res = run_benchmark(task_ids=DEMO3_TASKS if mock else None, runs=runs)
     if res.get("average_savings_pct") is not None:
         print(f"average savings over {res['comparable_tasks']}/{res['total_tasks']} comparable tasks: {res['average_savings_pct']}%")
     print(f"provider={res['provider']} model={res.get('coder_model')} measurement={res['measurement']} runs/mode={runs} repair budget={res['repair_budget']}\n")

@@ -121,6 +121,26 @@ def provider_status() -> dict:
 
 
 MAX_OUTPUT_BUDGET = 8192
+_TOO_LARGE = re.compile(r"Limit\s+(\d+),\s*Requested\s+(\d+)", re.I)
+
+
+def _call_fit(provider: str, model: str, system: str, prompt: str, max_tokens: int, stage: str,
+              transport: httpx.BaseTransport | None = None) -> LLMResult:
+    """Providers with a per-request token cap that counts the OUTPUT budget (Groq free tier: 'Request too large ...
+    Limit 8000, Requested 9500') reject a call with HTTP 413 before any token is used. Retry ONCE with the output
+    budget reduced by the stated excess, if at least 512 output tokens remain; otherwise report the 413."""
+    try:
+        return _call(provider, model, system, prompt, max_tokens, stage, transport)
+    except LLMUnavailable as e:
+        m = _TOO_LARGE.search(str(e))
+        if "413" not in str(e) or not m:
+            raise
+        limit, requested = int(m.group(1)), int(m.group(2))
+        fitted = max_tokens - (requested - limit) - 64
+        if fitted < 512:
+            raise LLMUnavailable(f"{e} (prompt alone leaves fewer than 512 output tokens under the provider's per-request "
+                                 f"limit of {limit}; request too large for this account tier)") from None
+        return _call(provider, model, system, prompt, fitted, stage, transport)
 
 
 def complete(system: str, prompt: str, stage: str, task_id: str | None = None, max_tokens: int = 4000,
@@ -140,7 +160,7 @@ def complete(system: str, prompt: str, stage: str, task_id: str | None = None, m
         model = model_for(stage)
         if not model:
             raise LLMUnavailable(f"No model configured for stage {stage}: set VERICODE_CODER_MODEL / VERICODE_PLANNER_MODEL")
-        r = _call(provider, model, system, prompt, max_tokens, stage, transport)
+        r = _call_fit(provider, model, system, prompt, max_tokens, stage, transport)
         if r.truncated and max_tokens < MAX_OUTPUT_BUDGET:
             # Output hit the token limit (reasoning models spend part of it on hidden reasoning). The truncated call's
             # tokens were really consumed: record them, then retry ONCE with a larger budget.
@@ -148,7 +168,7 @@ def complete(system: str, prompt: str, stage: str, task_id: str | None = None, m
             record_usage(task_id, r)
             if ledger is not None:
                 ledger.append(r)
-            r = _call(provider, model, system, prompt, min(max_tokens * 2, MAX_OUTPUT_BUDGET), stage, transport)
+            r = _call_fit(provider, model, system, prompt, min(max_tokens * 2, MAX_OUTPUT_BUDGET), stage, transport)
         if r.truncated and not r.text.strip():
             record_usage(task_id, r)
             if ledger is not None:

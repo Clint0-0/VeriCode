@@ -1,0 +1,99 @@
+name: Benchmark (real provider)
+
+# Manual only: spends LLM quota. Never runs on push. Results are traceable: every run record (JSONL), the summary
+# and the markdown report are uploaded as an artifact AND printed in the job log (secret-scanned before writing).
+on:
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: "Catalog task ids, comma-separated (empty = all 12)"
+        default: ""
+      configurations:
+        description: "Configurations (baseline is always included)"
+        default: "baseline,vericode_full,vericode_adaptive"
+      runs:
+        description: "Repetitions per configuration (1-10)"
+        default: "3"
+      max_tokens:
+        description: "Stop starting new runs after this many ACTUAL provider tokens (empty = no cap)"
+        default: "150000"
+      resume_from_run:
+        description: "Run id of an earlier Benchmark run whose records to continue (completed runs are not repeated)"
+        default: ""
+      plan_only:
+        description: "Only print the ESTIMATED usage (no LLM calls)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      VERICODE_LLM_PROVIDER: ${{ vars.VERICODE_LLM_PROVIDER }}
+      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+      VERICODE_CODER_MODEL: ${{ vars.VERICODE_CODER_MODEL }}
+      VERICODE_PLANNER_MODEL: ${{ vars.VERICODE_PLANNER_MODEL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      VERICODE_TOKEN_FILE: /tmp/vericode_token
+      VERICODE_DB: /tmp/vericode_benchmark.db
+      VERICODE_SANDBOX: process
+      # unattended: wait out per-minute resets (Groq free tier), stop on long (daily) ones
+      VERICODE_RATE_LIMIT_MAX_WAIT: "180"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install VeriCode and benchmark repositories
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r backend/requirements.txt
+          npm ci --prefix tools/ts-checker --no-audit --no-fund --loglevel=error
+          scripts/setup_benchmark_repos.sh
+      - name: Previous records (resume)
+        if: inputs.resume_from_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p prev
+          gh run download "${{ inputs.resume_from_run }}" --repo "${{ github.repository }}" -n benchmark-results -D prev
+          cp prev/runs.jsonl runs.jsonl
+          echo "resuming with $(wc -l < runs.jsonl) earlier run records"
+      - name: Plan (ESTIMATED usage)
+        working-directory: backend
+        run: ../.venv/bin/python -m vericode.bench_cli --plan --request-cap 8000 --runs "${{ inputs.runs }}" --tasks "${{ inputs.tasks }}" --configurations "${{ inputs.configurations }}"
+      - name: Run
+        if: ${{ !inputs.plan_only }}
+        working-directory: backend
+        run: |
+          ../.venv/bin/python -m vericode.bench_cli --runs "${{ inputs.runs }}" --tasks "${{ inputs.tasks }}" \
+            --configurations "${{ inputs.configurations }}" --records ../runs.jsonl --out ../results \
+            ${{ inputs.max_tokens != '' && format('--max-tokens {0}', inputs.max_tokens) || '' }}
+      - name: Print run records
+        if: ${{ always() && !inputs.plan_only }}
+        run: |
+          echo "===RECORDS_JSONL_BEGIN==="
+          cat runs.jsonl 2>/dev/null || true
+          echo "===RECORDS_JSONL_END==="
+          cp runs.jsonl results/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && !inputs.plan_only }}
+        with:
+          name: benchmark-results
+          path: results/
+          if-no-files-found: warn

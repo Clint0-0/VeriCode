@@ -1,9 +1,14 @@
 """Modules G+H - Surgical context optimisation and the coding agent orchestrator.
 
-Modes:
-  vericode - relevant files only + planner skeleton + local/live verification + compact pre-flight briefing.
-  baseline - conventional agent: whole repository source as context, no pre-flight; same coder, same
-             validation commands and same repair budget.
+Modes (all share the coder model, validation commands and repair budget):
+  baseline          - conventional agent: whole repository source as context, no pre-flight.
+  vericode_full     - original VeriCode: relevant files + planner skeleton + local/live verification + briefing.
+  vericode_adaptive - risk gate (api_risk.py): tasks with any sign of third-party API involvement take the full
+                      path; tasks with positive evidence of none skip the planner (fast path). On both paths the
+                      code the coder writes is audited against the installed packages after every attempt
+                      (api_audit.py, no LLM call); audit problems are repaired like failing tests.
+  context_only      - ablation: relevant files only, no planner, no audit.
+  vericode          - user-facing alias: vericode_adaptive when settings.adaptive_execution, else vericode_full.
 Each run executes in an isolated copy of the workspace (`demos/_runs/<task>`); changes are applied to
 the real workspace only through apply_changes(), which refuses to overwrite files modified since the run.
 """
@@ -21,6 +26,8 @@ from pathlib import Path
 
 from . import db, llm, memory
 from .config import ROOT, settings
+from .api_audit import audit_changes
+from .api_risk import assess
 from .repo_intel import ProjectEnvironment, conventions_text, inspect_project, select_relevant_files
 from .security import SecurityError, run_command, safe_join, sandbox_backend
 from .skeleton import generate_skeleton
@@ -63,6 +70,30 @@ def outline(env: ProjectEnvironment, paths: list[str]) -> str:
         if f.path in paths:
             out.append(f"{f.path}: defines {', '.join(f.symbols[:15]) or '-'}; imports {', '.join(f.imports[:10]) or '-'}")
     return "\n".join(out)
+
+
+MODES = ("baseline", "vericode", "vericode_full", "vericode_adaptive", "context_only")
+
+
+def resolve_mode(mode: str) -> str:
+    if mode == "vericode":
+        return "vericode_adaptive" if settings.adaptive_execution else "vericode_full"
+    if mode not in MODES:
+        raise ValueError(f"unknown mode {mode!r}; expected one of {MODES}")
+    return mode
+
+
+def deps_compact(env: ProjectEnvironment) -> str:
+    return ", ".join(f"{d.name}=={d.installed or 'NOT INSTALLED'}" for d in env.dependencies) or "(none)"
+
+
+def audit_briefing(problems: list[dict]) -> str:
+    lines = ["API AUDIT OF YOUR CODE (checked against the installed packages; fix every item):"]
+    for f in problems[:12]:
+        corr = f.get("suggested_correction")
+        lines.append(f"- {f.get('file')}:{f.get('line')} {f['planned_api']} [{f['status']}]: {(f.get('explanation') or '')[:220]}"
+                     + (f" Correction: {corr[:200]}" if corr and corr not in (f.get("explanation") or "") else ""))
+    return "\n".join(lines)
 
 
 def build_briefing(findings: list[dict]) -> str:
@@ -225,9 +256,11 @@ def failure_digest(checks: dict, limit: int = 2500) -> str:
 # --------------------------------------------------------------------------- orchestration
 class TaskRunner:
     def __init__(self, task_id: str, project: Path, prompt: str, mode: str, max_repairs: int | None = None,
-                 tavily: TavilyClient | None = None, live: bool = True, acceptance: dict[str, str] | None = None):
+                 tavily: TavilyClient | None = None, live: bool = True, acceptance: dict[str, str] | None = None,
+                 seed: dict[str, str] | None = None):
         self.task_id, self.project, self.prompt, self.mode = task_id, project, prompt, mode
         self.acceptance = acceptance or {}
+        self.seed = seed or {}
         self.max_repairs = settings.max_repair_attempts if max_repairs is None else max_repairs
         self.tavily = tavily or TavilyClient()
         self.live = live
@@ -239,10 +272,17 @@ class TaskRunner:
         with db.tx() as c:
             c.execute("UPDATE tasks SET events_json=?, status=? WHERE id=?", (db.dumps(self.events), f"running:{stage}", self.task_id))
 
+    def _timed(self, key: str, t0: float) -> None:
+        self.timings[key] = round(self.timings.get(key, 0.0) + time.time() - t0, 3)
+
     def run(self) -> dict:
         t0 = time.time()
-        result: dict = {"mode": self.mode, "provider": settings.effective_provider()}
+        self.timings: dict[str, float] = {}
+        plan = resolve_mode(self.mode)
+        result: dict = {"mode": self.mode, "configuration": plan, "provider": settings.effective_provider()}
         preflight: dict = {}
+        originals: dict[str, str | None] = {}
+        audit_on = plan == "vericode_adaptive"
         try:
             env = inspect_project(self.project)
             self.event("inspect", f"Inspected project: {len(env.files)} source files, {len(env.dependencies)} dependencies",
@@ -252,6 +292,8 @@ class TaskRunner:
             backend = sandbox_backend()
             sandbox = make_sandbox(self.project, self.task_id, link_heavy=(backend == "process"))
             self.event("sandbox", f"Isolated workspace copy created (execution backend: {backend})", {"backend": backend})
+            for dst_rel, src_rel in (self.seed or {}).items():  # task setup files (e.g. a seeded bug), before the run starts
+                shutil.copy2(safe_join(TASKS_DIR, src_rel), safe_join(sandbox, dst_rel))
             qbase = quality_baseline(sandbox, env, backend, self.project) if getattr(env, "quality_commands", None) else {}
             for dst_rel, src_rel in self.acceptance.items():  # task acceptance tests (demo catalog)
                 src = safe_join(TASKS_DIR, src_rel)
@@ -261,33 +303,65 @@ class TaskRunner:
             if self.acceptance:
                 self.event("acceptance", f"Added acceptance tests: {list(self.acceptance)}", {})
 
-            if self.mode == "vericode":
+            path = "baseline"
+            if plan != "baseline":
+                ts = time.time()
                 selected = select_relevant_files(env, self.prompt)
                 paths = [s["path"] for s in selected]
+                self._timed("select", ts)
                 self.event("select", f"Selected {len(paths)} relevant files", {"files": selected})
-                sk_text_ctx = outline(env, paths)
-                sk, sk_errors = generate_skeleton(self.prompt, deps_summary(env), sk_text_ctx, self.task_id, self.ledger)
-                self.event("skeleton", f"API skeleton: {sum(len(p.planned_apis) for p in sk.packages)} planned APIs",
-                           {"skeleton": sk.model_dump(), "validation_errors": sk_errors})
-                findings = [f.to_dict() for f in verify_skeleton(env, sk, self.tavily, live=self.live, task=self.prompt)]
-                rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
-                self.event("verify", f"Verified {len(findings)} APIs", {"statuses": [f["status"] for f in findings]})
-                briefing = build_briefing(findings)
-                preflight = {"selected_files": selected, "skeleton": sk.model_dump(), "skeleton_errors": sk_errors,
-                             "findings": findings, "briefing": briefing, "rules_saved": [r["id"] for r in rules],
-                             "rules_invalidated": invalidated, "tavily_calls": self.tavily.calls,
-                             "tavily_configured": bool(self.tavily.api_key),
-                             "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings}}
-                context_paths = paths
-                context = "\n\n".join(file_block(sandbox, p) for p in context_paths if (sandbox / p).exists())
+                risk = None
+                if plan == "vericode_full":
+                    path = "full"
+                elif plan == "context_only":
+                    path = "context_only"
+                else:
+                    risk = assess(env, self.prompt)
+                    path = "fast" if risk.fast_path else "full"
+                    self.event("gate", f"Risk gate: {risk.risk} API risk -> {path} path", risk.to_dict())
+                context = "\n\n".join(file_block(sandbox, p) for p in paths if (sandbox / p).exists())
                 conv = conventions_text(env)
-                user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED DEPENDENCIES:\n{deps_summary(env)}\n\n"
-                        f"PROJECT CONVENTIONS:\n{conv}\n\n"
-                        f"RELEVANT FILES:\n<untrusted>\n{context}\n</untrusted>\n\nValidation: {', '.join(' '.join(c) for c in env.test_commands)}")
+                context_paths = paths
+                if path == "full":
+                    ts = time.time()
+                    sk_text_ctx = outline(env, paths)
+                    sk, sk_errors = generate_skeleton(self.prompt, deps_summary(env), sk_text_ctx, self.task_id, self.ledger)
+                    self._timed("planner", ts)
+                    self.event("skeleton", f"API skeleton: {sum(len(p.planned_apis) for p in sk.packages)} planned APIs",
+                               {"skeleton": sk.model_dump(), "validation_errors": sk_errors})
+                    ts = time.time()
+                    findings = [f.to_dict() for f in verify_skeleton(env, sk, self.tavily, live=self.live, task=self.prompt)]
+                    self._timed("verify", ts)
+                    rules = [r for r in (memory.save_from_finding(f) for f in findings) if r]
+                    self.event("verify", f"Verified {len(findings)} APIs", {"statuses": [f["status"] for f in findings]})
+                    briefing = build_briefing(findings)
+                    preflight = {"selected_files": selected, "skeleton": sk.model_dump(), "skeleton_errors": sk_errors,
+                                 "findings": findings, "briefing": briefing, "rules_saved": [r["id"] for r in rules],
+                                 "rules_invalidated": invalidated, "tavily_calls": self.tavily.calls,
+                                 "tavily_configured": bool(self.tavily_api_key_set()),
+                                 "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings}}
+                    if plan == "vericode_full":  # original prompt, unchanged (keeps historical comparability)
+                        user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED DEPENDENCIES:\n{deps_summary(env)}\n\n"
+                                f"PROJECT CONVENTIONS:\n{conv}\n\n"
+                                f"RELEVANT FILES:\n<untrusted>\n{context}\n</untrusted>\n\nValidation: {', '.join(' '.join(c) for c in env.test_commands)}")
+                    else:  # adaptive full path: the briefing already carries verified package versions
+                        user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED: {deps_compact(env)}\nCONVENTIONS: {conv}\n\n"
+                                f"RELEVANT FILES:\n<untrusted>\n{context}\n</untrusted>\n\nValidation: {', '.join(' '.join(c) for c in env.test_commands)}")
+                else:
+                    findings = []
+                    briefing = ("PRE-FLIGHT: skipped (no third-party API involvement detected); your code is audited against the "
+                                "installed packages after each attempt." if path == "fast" else "PRE-FLIGHT: none.")
+                    preflight = {"selected_files": selected, "findings": [], "briefing": briefing, "skeleton": None,
+                                 "environment": {"dependencies": [d.__dict__ for d in env.dependencies], "warnings": env.warnings}}
+                    user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nINSTALLED: {deps_compact(env)}\nCONVENTIONS: {conv}\n\n"
+                            f"RELEVANT FILES:\n<untrusted>\n{context}\n</untrusted>\n\nValidation: {', '.join(' '.join(c) for c in env.test_commands)}")
+                preflight["execution_path"] = path
+                preflight["risk"] = risk.to_dict() if risk else None
             else:
                 context_paths = [f.path for f in env.files]
                 context = "\n\n".join(file_block(sandbox, p) for p in context_paths)
-                preflight = {"selected_files": [{"path": p, "reasons": ["baseline: whole repository"]} for p in context_paths]}
+                preflight = {"selected_files": [{"path": p, "reasons": ["baseline: whole repository"]} for p in context_paths],
+                             "execution_path": "baseline"}
                 self.event("select", f"Baseline: loaded all {len(context_paths)} source files", {})
                 user = (f"TASK:\n{self.prompt}\n\nREPOSITORY FILES:\n<untrusted>\n{context}\n</untrusted>\n\n"
                         f"Validation: {', '.join(' '.join(c) for c in env.test_commands)}")
@@ -297,32 +371,52 @@ class TaskRunner:
             stage = "coder"
             checks: dict = {"passed": False, "results": []}
             first_pass = None
+            audit: dict = {"findings": [], "problems": []}
             for attempt in range(self.max_repairs + 1):
+                ts = time.time()
                 r = llm.complete(CODER_SYSTEM, user, stage=stage, task_id=self.task_id, max_tokens=4000, ledger=self.ledger)
+                self._timed(stage, ts)
                 if r.text.startswith("MOCK_PROVIDER_NO_SCRIPT"):
                     raise llm.LLMUnavailable(r.text)
                 edits = parse_edits(r.text)
+                for e in edits:  # remember pre-change content once, for the audit's "added lines"
+                    if e["path"] not in originals:
+                        try:
+                            originals[e["path"]] = _read(safe_join(sandbox, e["path"]))
+                        except SecurityError:
+                            pass
                 changed, errs = apply_edits(sandbox, edits)
                 changed_all += [c for c in changed if c not in changed_all]
                 self.event(stage, f"Attempt {attempt + 1}: {len(edits)} edits, {len(changed)} files changed, {len(errs)} edit errors",
                            {"changed": changed, "errors": errs})
+                ts = time.time()
                 checks = (run_checks(sandbox, env, backend, self.project, qbase) if not errs or changed
                           else {"passed": False, "results": [], "validated": False, "regressions": [], "note": "edits failed"})
+                self._timed("tests", ts)
+                if audit_on and changed_all:
+                    ts = time.time()
+                    audit = audit_changes(env, sandbox, changed_all, originals)
+                    self._timed("audit", ts)
+                    self.event("audit", audit["summary"], {"problems": audit["problems"][:20]})
                 if first_pass is None:
                     first_pass = checks["passed"]
                 attempts.append({"attempt": attempt + 1, "stage": stage, "edits": len(edits), "edit_errors": errs,
-                                 "passed": checks["passed"], "input_tokens": r.input_tokens, "output_tokens": r.output_tokens})
+                                 "passed": checks["passed"], "input_tokens": r.input_tokens, "output_tokens": r.output_tokens,
+                                 "audit_problems": len(audit["problems"]) if audit_on else None})
                 self.event("test", "Checks passed" if checks["passed"] else "Checks failed", {"passed": checks["passed"]})
-                if checks["passed"]:
+                audit_blocks = audit_on and bool(audit["problems"])
+                if checks["passed"] and not audit_blocks:
                     break
-                if not checks.get("validated") and changed and not errs:
+                if not checks.get("validated") and changed and not errs and not audit_blocks:
                     break  # no tests to repair against: stop and report partial (unvalidated)
                 if attempt == self.max_repairs:
                     break
                 stage = "repair"
-                failure = failure_digest(checks) if checks["results"] else ""
+                failure = failure_digest(checks) if checks["results"] and not checks["passed"] else ""
                 failure += ("\nEDIT ERRORS:\n" + "\n".join(errs)) if errs else ""
-                if self.mode == "vericode":
+                if audit_blocks:
+                    failure += ("\n" if failure else "") + audit_briefing(audit["problems"])
+                if plan != "baseline":
                     # targeted repair: only failing output + files we changed (+ briefing)
                     files = "\n\n".join(file_block(sandbox, p) for p in changed_all if (sandbox / p).exists())
                     user = (f"TASK:\n{self.prompt}\n\n{briefing}\n\nYOUR CHANGES FAILED VALIDATION:\n{failure}\n\n"
@@ -331,8 +425,14 @@ class TaskRunner:
                     context = "\n\n".join(file_block(sandbox, p) for p in sorted(set(context_paths + changed_all)) if (sandbox / p).exists())
                     user = (f"TASK:\n{self.prompt}\n\nREPOSITORY FILES:\n<untrusted>\n{context}\n</untrusted>\n\n"
                             f"VALIDATION FAILED:\n{failure}\nFix it.")
-            diff = unified_diff(self.project, sandbox, changed_all)
-            result["api_corrections"] = api_corrections(preflight.get("findings", []), diff) if self.mode == "vericode" else []
+            diff = "".join("".join(difflib.unified_diff((originals.get(p) or "").splitlines(keepends=True),
+                                                        (_read(sandbox / p) or "").splitlines(keepends=True), f"a/{p}", f"b/{p}"))
+                           for p in changed_all)
+            result["api_corrections"] = api_corrections(preflight.get("findings", []), diff) if path == "full" else []
+            # measurement only, identical for every mode: which third-party API problems does the final code contain?
+            ts = time.time()
+            final_audit = audit_changes(env, sandbox, changed_all, originals) if changed_all else {"findings": [], "problems": [], "checked": 0}
+            self._timed("final_audit", ts)
             if checks["passed"]:
                 outcome = "succeeded"
             elif changed_all and not checks.get("validated") and not any(a["edit_errors"] for a in attempts[-1:]):
@@ -340,10 +440,14 @@ class TaskRunner:
             else:
                 outcome = "failed"
             result.update({
-                "success": checks["passed"], "outcome": outcome, "backend": backend,
+                "success": checks["passed"], "outcome": outcome, "backend": backend, "execution_path": path,
+                "risk": preflight.get("risk"),
                 "first_pass_success": bool(first_pass), "attempts": attempts,
                 "repair_attempts": max(0, len(attempts) - 1), "changed_files": changed_all, "diff": diff,
                 "checks": checks, "sandbox": str(sandbox), "context_files": len(context_paths),
+                "test_pass_rate": _test_pass_rate(checks),
+                "api_audit": {"checked": final_audit.get("checked", 0), "problems": final_audit.get("problems", [])[:20],
+                              "problem_count": len(final_audit.get("problems", []))},
                 "original_hashes": {p: _sha(self.project / p) for p in changed_all},
                 "original_contents": {p: _read(self.project / p) for p in changed_all},
             })
@@ -351,6 +455,7 @@ class TaskRunner:
             result.update({"success": False, "outcome": "failed", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]})
             self.event("error", result["error"])
         result["duration_s"] = round(time.time() - t0, 2)
+        result["timings_s"] = self.timings
         result["tokens"] = summarize_ledger(self.ledger)
         result["search_calls"] = self.tavily.calls
         with db.tx() as c:
@@ -358,6 +463,25 @@ class TaskRunner:
                       (result.get("outcome", "failed"), result.get("outcome", "failed"), time.time(), int(bool(result.get("success"))),
                        db.dumps(preflight), db.dumps(result), db.dumps(self.events), result["provider"], self.task_id))
         return result
+
+    def tavily_api_key_set(self) -> bool:
+        return bool(getattr(self.tavily, "api_key", None))
+
+
+def _test_pass_rate(checks: dict) -> float | None:
+    """Fraction of test cases passed in the final run, parsed from pytest/vitest summaries (None if unknown)."""
+    passed = failed = 0
+    for r in checks.get("results", []):
+        if r.get("kind") != "test":
+            continue
+        out = (r.get("stdout") or "") + "\n" + (r.get("stderr") or "")
+        m = re.findall(r"(\d+) passed", out)
+        f = re.findall(r"(\d+) failed", out)
+        if m:
+            passed += int(m[-1])
+        if f:
+            failed += int(f[-1])
+    return round(passed / (passed + failed), 3) if passed + failed else None
 
 
 PROBLEM_STATUSES = {"NOT_FOUND", "INCOMPATIBLE", "DEPRECATED"}
@@ -429,9 +553,10 @@ def load_catalog() -> list[dict]:
 
 
 def run_task_async(project: Path, prompt: str, mode: str, max_repairs: int | None = None, live: bool = True,
-                   acceptance: dict | None = None) -> str:
+                   acceptance: dict | None = None, seed: dict | None = None) -> str:
     tid = create_task(project, prompt, mode)
-    threading.Thread(target=lambda: TaskRunner(tid, project, prompt, mode, max_repairs, live=live, acceptance=acceptance).run(), daemon=True).start()
+    threading.Thread(target=lambda: TaskRunner(tid, project, prompt, mode, max_repairs, live=live, acceptance=acceptance,
+                                               seed=seed).run(), daemon=True).start()
     return tid
 
 
