@@ -4,6 +4,7 @@ on:
   push:
     branches: ["feat/**", "fix/**", "main"]
   pull_request:
+  workflow_dispatch:  # re-run by hand (e.g. when a push event was lost during a GitHub outage)
 
 permissions:
   contents: read
