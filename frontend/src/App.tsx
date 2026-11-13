@@ -106,8 +106,14 @@ function Shell() {
         <div className="hidden space-y-1 border-t border-ink-700 p-3 text-[11px] text-slate-500 md:block">
           {health.error ? <div className="text-rose-300">Backend offline</div> : health.data ? (
             <>
-              <div>LLM: <span className={health.data.provider === 'mock' || !health.data.provider_ready ? 'text-amber-300' : 'text-emerald-300'}>{health.data.provider}{health.data.provider === 'mock' ? ' (scripted demo)' : health.data.provider_ready ? '' : ' (not ready)'}</span></div>
-              <div>Tavily: <span className={health.data.tavily_configured ? 'text-emerald-300' : 'text-amber-300'}>{health.data.tavily_configured ? 'configured' : 'no key'}</span></div>
+              <div className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${health.data.provider === 'mock' || !health.data.provider_ready ? 'bg-amber-400/90' : 'bg-emerald-400'}`} />
+                <span>LLM: <span className="text-slate-300">{health.data.provider}{health.data.provider === 'mock' ? ' (scripted demo)' : health.data.provider_ready ? '' : ' (not ready)'}</span></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${health.data.tavily_configured ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                <span>Tavily: <span className="text-slate-300">{health.data.tavily_configured ? 'configured' : 'no key'}</span></span>
+              </div>
               <div>Process sandbox net: {health.data.network_isolation ? 'unshare' : 'not isolated'}</div>
             </>
           ) : '…'}

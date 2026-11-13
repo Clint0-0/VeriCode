@@ -15,12 +15,37 @@ export function Card({ title, actions, children, className = '' }: { title?: Rea
   )
 }
 
-const TONES: Record<string, string> = {
-  green: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
-  amber: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
-  red: 'bg-rose-500/10 text-rose-300 ring-rose-500/30',
-  blue: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
-  gray: 'bg-slate-500/10 text-slate-300 ring-slate-500/30',
+const TONES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
+  green: {
+    bg: 'bg-emerald-950/40',
+    text: 'text-emerald-300',
+    dot: 'bg-emerald-400',
+    border: 'border-emerald-800/40',
+  },
+  amber: {
+    bg: 'bg-ink-850',
+    text: 'text-slate-200',
+    dot: 'bg-amber-400',
+    border: 'border-ink-700',
+  },
+  red: {
+    bg: 'bg-rose-950/40',
+    text: 'text-rose-300',
+    dot: 'bg-rose-400',
+    border: 'border-rose-800/40',
+  },
+  blue: {
+    bg: 'bg-sky-950/40',
+    text: 'text-sky-300',
+    dot: 'bg-sky-400',
+    border: 'border-sky-800/40',
+  },
+  gray: {
+    bg: 'bg-ink-950/80',
+    text: 'text-slate-400',
+    dot: 'bg-slate-500',
+    border: 'border-ink-700/80',
+  },
 }
 const STATUS_TONE: Record<string, string> = {
   VERIFIED_LOCAL: 'green', VERIFIED_LIVE: 'green', CURRENT_SUPPORTED: 'green', succeeded: 'green', ok: 'green',
@@ -31,11 +56,17 @@ const STATUS_TONE: Record<string, string> = {
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
   const t = tone ?? STATUS_TONE[String(children)] ?? (String(children).startsWith('running') ? 'blue' : 'gray')
-  return <span className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-medium ring-1 ring-inset ${TONES[t]}`}>{children}</span>
+  const style = TONES[t] ?? TONES.gray
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium tracking-tight ${style.bg} ${style.text} ${style.border}`}>
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
+      <span>{children}</span>
+    </span>
+  )
 }
 
 export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'green' | 'amber' | 'red' }) {
-  const color = tone === 'green' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : tone === 'red' ? 'text-rose-300' : 'text-slate-100'
+  const color = tone === 'green' ? 'text-emerald-300' : tone === 'amber' ? 'text-slate-100' : tone === 'red' ? 'text-rose-300' : 'text-slate-100'
   return (
     <div className="rounded-lg border border-ink-700 bg-ink-900 px-4 py-3">
       <div className="text-xs text-slate-400">{label}</div>
@@ -78,8 +109,17 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export function Notice({ children, tone = 'amber' }: { children: ReactNode; tone?: 'amber' | 'blue' }) {
-  const c = tone === 'amber' ? 'border-amber-500/30 bg-amber-500/5 text-amber-200' : 'border-sky-500/30 bg-sky-500/5 text-sky-200'
-  return <div className={`rounded-md border px-3 py-2 text-xs ${c}`}>{children}</div>
+  const isAmber = tone === 'amber'
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-ink-700/80 bg-ink-900/90 px-3.5 py-2.5 text-xs text-slate-300 shadow-sm backdrop-blur-sm">
+      <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${isAmber ? 'bg-amber-400/15 text-amber-300' : 'bg-sky-400/15 text-sky-300'}`}>
+        <span className="text-[10px] font-semibold leading-none">ℹ</span>
+      </div>
+      <div className="flex-1 leading-relaxed [&>b]:font-semibold [&>b]:text-slate-100">
+        {children}
+      </div>
+    </div>
+  )
 }
 
 export function Mono({ children, className = '' }: { children: ReactNode; className?: string }) {
